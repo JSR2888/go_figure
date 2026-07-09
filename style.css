@@ -324,6 +324,105 @@ footer{
   z-index: 1;
 }
 
+/* ===== Achievements panel ===== */
+.sheet-backdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 20, 15, 0.72);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  animation: fadeIn 0.2s ease-out;
+}
+.sheet-backdrop[hidden]{ display: none; }
+
+.sheet-card{
+  background: var(--paper);
+  color: var(--tile-ink);
+  border-radius: 16px;
+  padding: 24px 24px 20px;
+  max-width: 420px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  animation: winPop 0.32s cubic-bezier(.34,1.56,.64,1);
+}
+
+.sheet-header{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.sheet-header h2{
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 20px;
+  margin: 0;
+}
+.sheet-close{
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: var(--tile-ink);
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.sheet-close:hover{ background: rgba(0,0,0,0.06); }
+
+.sheet-stats{
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.stat-chip{
+  background: #fff8ea;
+  border: 1px solid var(--tile-shadow);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.stat-chip .stat-value{
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 18px;
+  display: block;
+}
+.stat-chip .stat-label{
+  font-size: 11px;
+  color: #5a4a30;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.sheet-list{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.achievement-row{
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--tile-shadow);
+  background: #fff8ea;
+}
+.achievement-row.locked{
+  opacity: 0.55;
+  background: transparent;
+}
+.row-icon{ font-size: 18px; line-height: 1.3; }
+.row-text{ display: flex; flex-direction: column; text-align: left; }
+.row-title{ font-weight: 700; font-size: 13.5px; }
+.row-desc{ font-size: 12px; color: #5a4a30; }
+
 /* ===== Victory overlay ===== */
 .win-backdrop{
   position: fixed;
