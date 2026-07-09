@@ -133,6 +133,11 @@
   const winCloseBtn = document.getElementById('winCloseBtn');
   const confettiCanvas = document.getElementById('confettiCanvas');
   const timerPill = document.getElementById('timerPill');
+  const achvBackdrop = document.getElementById('achvBackdrop');
+  const achvCloseBtn = document.getElementById('achvCloseBtn');
+  const achvStatsEl = document.getElementById('achvStats');
+  const achvListEl = document.getElementById('achvList');
+  const achievementsBtn = document.getElementById('achievementsBtn');
 
   // equation is an ordered list of tokens: { type: 'number'|'operator', display, value, numberId? }
   let equation = [];
@@ -159,6 +164,7 @@
       longestStreak: 0,
       lastWonDate: null,   // UTC date key, e.g. '2026-07-09'
       achievements: [],    // array of achievement ids already unlocked
+      recentTimesMs: [],   // last N solve times, oldest first — used for "faster than your own average"
     };
   }
 
@@ -211,10 +217,19 @@
     const stats = loadStats();
     const todayKey = utcDateKey(new Date());
 
+    // Compare this solve to your own past ones BEFORE adding it to the list,
+    // so "faster than X% of your solves" means past solves, not itself.
+    const pastTimes = stats.recentTimesMs.slice();
+    const selfPercentile = pastTimes.length >= 3
+      ? Math.round((pastTimes.filter(t => t > elapsedMs).length / pastTimes.length) * 100)
+      : null; // not enough history yet to say anything meaningful
+
     stats.gamesWon += 1;
     if (stats.bestTimeMs === null || elapsedMs < stats.bestTimeMs){
       stats.bestTimeMs = elapsedMs;
     }
+    stats.recentTimesMs.push(elapsedMs);
+    if (stats.recentTimesMs.length > 30) stats.recentTimesMs.shift(); // cap history, oldest first
 
     if (stats.lastWonDate === todayKey){
       // already recorded a win today (e.g. page reload) — don't double-count streak
@@ -234,7 +249,7 @@
     });
 
     saveStats(stats);
-    return { stats, newlyUnlocked };
+    return { stats, newlyUnlocked, selfPercentile };
   }
   // ----------------------------------------------------------------------
 
@@ -473,11 +488,15 @@
     const elapsedMs = performance.now() - (startTime !== null ? startTime : performance.now());
     winTimeEl.textContent = formatElapsed(elapsedMs);
 
-    const { stats, newlyUnlocked } = recordWin(elapsedMs);
+    const { stats, newlyUnlocked, selfPercentile } = recordWin(elapsedMs);
 
-    winStreakEl.textContent = stats.currentStreak > 1
+    const streakText = stats.currentStreak > 1
       ? '🔥 ' + stats.currentStreak + '-day streak'
       : (stats.currentStreak === 1 ? 'First day of a new streak — come back tomorrow!' : '');
+    const speedText = selfPercentile !== null
+      ? 'Faster than ' + selfPercentile + '% of your past solves'
+      : '';
+    winStreakEl.textContent = [streakText, speedText].filter(Boolean).join(' · ');
 
     winAchievementsEl.innerHTML = '';
     newlyUnlocked.forEach(a => {
@@ -586,6 +605,47 @@
     ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
   }
 
+  // ---- Achievements panel ----
+  function statChip(value, label){
+    return '<div class="stat-chip"><span class="stat-value">' + value + '</span><span class="stat-label">' + label + '</span></div>';
+  }
+
+  function openAchievements(){
+    const stats = loadStats();
+
+    achvStatsEl.innerHTML =
+      statChip(stats.gamesWon, 'Puzzles won') +
+      statChip(stats.bestTimeMs !== null ? formatElapsed(stats.bestTimeMs) : '--', 'Best time') +
+      statChip(stats.currentStreak, 'Current streak') +
+      statChip(stats.longestStreak, 'Longest streak');
+
+    achvListEl.innerHTML = '';
+    ACHIEVEMENTS.forEach(a => {
+      const unlocked = stats.achievements.includes(a.id);
+      const row = document.createElement('div');
+      row.className = 'achievement-row' + (unlocked ? '' : ' locked');
+      row.innerHTML =
+        '<span class="row-icon">' + (unlocked ? '🏆' : '🔒') + '</span>' +
+        '<span class="row-text">' +
+          '<span class="row-title">' + a.title + '</span>' +
+          '<span class="row-desc">' + a.desc + '</span>' +
+        '</span>';
+      achvListEl.appendChild(row);
+    });
+
+    achvBackdrop.hidden = false;
+  }
+
+  function closeAchievements(){
+    achvBackdrop.hidden = true;
+  }
+
+  achievementsBtn.addEventListener('click', openAchievements);
+  achvCloseBtn.addEventListener('click', closeAchievements);
+  achvBackdrop.addEventListener('click', (e) => {
+    if (e.target === achvBackdrop) closeAchievements();
+  });
+
   // ---- keyboard support ----
   function tryTypeNumber(digit){
     const btns = numberTilesEl.querySelectorAll('.tile:not(.used)');
@@ -610,6 +670,10 @@
 
     if (!winBackdrop.hidden){
       if (e.key === 'Enter' || e.key === 'Escape') closeWin();
+      return;
+    }
+    if (!achvBackdrop.hidden){
+      if (e.key === 'Enter' || e.key === 'Escape') closeAchievements();
       return;
     }
 
