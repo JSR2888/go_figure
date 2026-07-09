@@ -423,6 +423,53 @@ footer{
 .row-title{ font-weight: 700; font-size: 13.5px; }
 .row-desc{ font-size: 12px; color: #5a4a30; }
 
+.win-card .sheet-close{
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+.win-actions{
+  display: flex;
+  gap: 10px;
+}
+.win-actions .btn{
+  flex: 1;
+  padding: 12px 14px;
+  font-size: 13px;
+}
+
+.solutions-counter{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  text-align: center;
+  color: var(--op-bg);
+  margin-top: 4px;
+}
+.solutions-counter[hidden]{ display: none; }
+
+.toast{
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(0);
+  background: var(--paper);
+  color: var(--tile-ink);
+  border-radius: 10px;
+  padding: 12px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  z-index: 1100;
+  animation: toastIn 0.3s ease-out;
+}
+.toast[hidden]{ display: none; }
+
+@keyframes toastIn{
+  from{ opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to{ opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
 /* ===== Victory overlay ===== */
 .win-backdrop{
   position: fixed;
