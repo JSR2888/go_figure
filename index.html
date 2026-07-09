@@ -16,6 +16,9 @@
     <button class="help-btn" id="helpBtn" aria-expanded="false" aria-controls="helpPanel">
       <span class="mark">?</span> How this works
     </button>
+    <button class="help-btn" id="achievementsBtn" style="margin-top: 10px;">
+      <span class="mark">🏆</span> Achievements
+    </button>
     <div class="help-panel" id="helpPanel" hidden>
       Your goal is to create a true equation using all of the digits given to you.
       <strong>Numbers</strong> get used up once played; <strong>operators</strong> stick around for reuse.
@@ -53,6 +56,18 @@
   <footer>
     Thanks for playing!
   </footer>
+
+  <!-- Achievements panel -->
+  <div class="sheet-backdrop" id="achvBackdrop" hidden>
+    <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="achvTitle">
+      <div class="sheet-header">
+        <h2 id="achvTitle">Your progress</h2>
+        <button class="sheet-close" id="achvCloseBtn" aria-label="Close">✕</button>
+      </div>
+      <div class="sheet-stats" id="achvStats"></div>
+      <div class="sheet-list" id="achvList"></div>
+    </div>
+  </div>
 
   <!-- Victory overlay: hidden until a correct equation is submitted -->
   <div class="win-backdrop" id="winBackdrop" hidden>
