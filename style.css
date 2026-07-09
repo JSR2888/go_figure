@@ -308,6 +308,22 @@ footer{
   outline-offset: 2px;
 }
 
+/* ===== Timer ===== */
+.timer-pill{
+  position: absolute;
+  top: -14px;
+  left: 16px;
+  background: var(--op-bg);
+  color: var(--op-ink);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.35);
+  z-index: 1;
+}
+
 /* ===== Victory overlay ===== */
 .win-backdrop{
   position: fixed;
@@ -371,11 +387,44 @@ footer{
   font-family: 'JetBrains Mono', monospace;
   font-size: 15px;
   color: #5a4a30;
-  margin: 0 0 24px;
+  margin: 0 0 6px;
 }
 .win-time span{
   font-weight: 700;
   color: var(--tile-ink);
+}
+
+.win-streak{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: #5a4a30;
+  margin: 0 0 16px;
+}
+
+.win-achievements{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.win-achievements:empty{ margin-bottom: 0; }
+
+.achievement-badge{
+  background: #fff8ea;
+  border: 1px solid var(--tile-shadow);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  text-align: left;
+  animation: winPop 0.4s cubic-bezier(.34,1.56,.64,1);
+}
+.achievement-badge .badge-title{
+  font-weight: 700;
+  display: block;
+  margin-bottom: 2px;
+}
+.achievement-badge .badge-desc{
+  color: #5a4a30;
 }
 
 .win-card .btn-submit{
