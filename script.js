@@ -138,6 +138,7 @@
   const winStreakEl = document.getElementById('winStreak');
   const winAchievementsEl = document.getElementById('winAchievements');
   const shareBtn = document.getElementById('shareBtn');
+  const shareBtnLabel = document.getElementById('shareBtnLabel');
   const keepPlayingBtn = document.getElementById('keepPlayingBtn');
   const confettiCanvas = document.getElementById('confettiCanvas');
   const timerPill = document.getElementById('timerPill');
@@ -679,9 +680,13 @@
   });
 
   function flashShareButton(){
-    const original = shareBtn.textContent;
-    shareBtn.textContent = '✅ Copied!';
-    setTimeout(() => { shareBtn.textContent = original; }, 1500);
+    const original = shareBtnLabel.textContent;
+    shareBtnLabel.textContent = 'Copied!';
+    shareBtn.classList.add('copied');
+    setTimeout(() => {
+      shareBtnLabel.textContent = original;
+      shareBtn.classList.remove('copied');
+    }, 1500);
   }
 
   function fallbackCopy(text){
