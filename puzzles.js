@@ -19,7 +19,7 @@
 
 const PUZZLE_BANK = {
   '2026-07-08': [1, 2, 3, 4],
-  '2026-07-09': [2, 3, 5, 8],
+  '2026-07-09': [2, 3, 4, 8],
   '2026-07-10': [1, 3, 4, 6, 9],
   // Add tomorrow's date and digits here whenever you're ready.
 };
