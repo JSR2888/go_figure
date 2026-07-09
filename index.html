@@ -10,7 +10,6 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
   <header>
     <h1>Go Figure</h1>
     <div class="eyebrow" style="margin-bottom: 20px;">By J. Roberts</div>
@@ -27,7 +26,6 @@
       <strong>Check equation</strong> (or hit Enter) to see if both sides really match. Remember, there may be more than one solution! Good luck!
     </div>
   </header>
-
   <div class="rig">
     <div class="tape-wrap">
       <div class="tape" id="tape">
@@ -37,27 +35,34 @@
       <div class="result-badge" id="resultBadge"></div>
     </div>
     <div class="status-line" id="statusLine"></div>
-
     <div class="rack">
       <span class="rack-label">Numbers</span>
       <div class="tiles" id="numberTiles"></div>
     </div>
-
     <div class="rack">
       <span class="rack-label">Operators</span>
       <div class="tiles" id="operatorTiles"></div>
     </div>
-
     <div class="controls">
       <button class="btn btn-ghost" id="backspaceBtn">⌫ Backspace</button>
       <button class="btn btn-ghost" id="clearBtn">Clear</button>
       <button class="btn btn-submit" id="submitBtn" disabled>Check equation</button>
     </div>
   </div>
-
   <footer>
     Thanks for playing!
   </footer>
+
+  <!-- Victory overlay: hidden until a correct equation is submitted -->
+  <div class="win-backdrop" id="winBackdrop" hidden>
+    <canvas id="confettiCanvas"></canvas>
+    <div class="win-card" id="winCard" role="dialog" aria-modal="true" aria-labelledby="winTitle">
+      <div class="win-emoji">🎉</div>
+      <h2 id="winTitle">You win!</h2>
+      <p class="win-time">Your time: <span id="winTime">--</span></p>
+      <button class="btn btn-submit" id="winCloseBtn">Nice!</button>
+    </div>
+  </div>
 
   <!-- puzzles.js must load before script.js — it defines PUZZLE_BANK -->
   <script src="puzzles.js"></script>
