@@ -39,6 +39,7 @@
       <div class="result-badge" id="resultBadge"></div>
     </div>
     <div class="status-line" id="statusLine"></div>
+    <div class="solutions-counter" id="solutionsCounter" hidden>🧩 Solutions found: <span id="solutionsCount">0</span></div>
     <div class="rack">
       <span class="rack-label">Numbers</span>
       <div class="tiles" id="numberTiles"></div>
@@ -73,14 +74,21 @@
   <div class="win-backdrop" id="winBackdrop" hidden>
     <canvas id="confettiCanvas"></canvas>
     <div class="win-card" id="winCard" role="dialog" aria-modal="true" aria-labelledby="winTitle">
+      <button class="sheet-close" id="winCloseX" aria-label="Close">✕</button>
       <div class="win-emoji">🎉</div>
       <h2 id="winTitle">You win!</h2>
       <p class="win-time">Your time: <span id="winTime">--</span></p>
       <p class="win-streak" id="winStreak"></p>
       <div class="win-achievements" id="winAchievements"></div>
-      <button class="btn btn-submit" id="winCloseBtn">Nice!</button>
+      <div class="win-actions">
+        <button class="btn btn-ghost" id="shareBtn">🔗 Share</button>
+        <button class="btn btn-submit" id="keepPlayingBtn">🔁 Keep playing</button>
+      </div>
     </div>
   </div>
+
+  <!-- Toast for achievements unlocked outside the main win modal (e.g. while exploring extra solutions) -->
+  <div class="toast" id="toast" hidden></div>
 
   <!-- puzzles.js must load before script.js — it defines PUZZLE_BANK -->
   <script src="puzzles.js"></script>
