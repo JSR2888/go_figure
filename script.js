@@ -118,9 +118,31 @@
   const clearBtn = document.getElementById('clearBtn');
   const helpBtn = document.getElementById('helpBtn');
   const helpPanel = document.getElementById('helpPanel');
+  const winBackdrop = document.getElementById('winBackdrop');
+  const winCard = document.getElementById('winCard');
+  const winTimeEl = document.getElementById('winTime');
+  const winCloseBtn = document.getElementById('winCloseBtn');
+  const confettiCanvas = document.getElementById('confettiCanvas');
 
   // equation is an ordered list of tokens: { type: 'number'|'operator', display, value, numberId? }
   let equation = [];
+
+  // ---- Timer ----
+  // Starts on the very first tile tap (number or operator), stops the
+  // moment a correct equation is submitted. Resets on Clear.
+  let startTime = null;
+  let hasWon = false;
+
+  function markStartIfNeeded(){
+    if (startTime === null) startTime = performance.now();
+  }
+
+  function formatElapsed(ms){
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return minutes + ':' + String(seconds).padStart(2, '0');
+  }
 
   function buildNumberTiles(){
     numberTilesEl.innerHTML = '';
@@ -148,6 +170,8 @@
   }
 
   function useNumber(idx, num, btnEl){
+    if (hasWon) return;
+    markStartIfNeeded();
     equation.push({ type: 'number', display: String(num), value: String(num), numberId: idx });
     btnEl.classList.add('used');
     pressAnim(btnEl);
@@ -155,6 +179,8 @@
   }
 
   function useOperator(op, btnEl){
+    if (hasWon) return;
+    markStartIfNeeded();
     equation.push({ type: 'operator', display: op.display, value: op.value });
     pressAnim(btnEl);
     render();
@@ -170,6 +196,7 @@
   }
 
   function backspace(){
+    if (hasWon) return;
     const last = equation.pop();
     if (!last) return;
     if (last.type === 'number'){
@@ -180,6 +207,7 @@
   }
 
   function clearAll(){
+    if (hasWon) return;
     equation = [];
     numberTilesEl.querySelectorAll('.tile').forEach(t => t.classList.remove('used'));
     render();
@@ -270,6 +298,8 @@
   }
 
   function submit(){
+    if (hasWon) return;
+
     const numbersUsed = equation.filter(t => t.type === 'number').length;
     if (numbersUsed < NUMBERS.length){
       showBadge(false);
@@ -301,6 +331,8 @@
         : left.toLocaleString() + ' doesn\u2019t equal ' + right.toLocaleString() + '.',
       isTrue ? 'good' : 'bad'
     );
+
+    if (isTrue) triggerWin();
   }
 
   function showBadge(isTrue){
@@ -312,6 +344,111 @@
   function showStatus(msg, kind){
     statusLine.textContent = msg;
     statusLine.className = 'status-line ' + kind;
+  }
+
+  // ---- Victory: modal + confetti ----
+  function triggerWin(){
+    hasWon = true;
+    const elapsedMs = performance.now() - (startTime !== null ? startTime : performance.now());
+    winTimeEl.textContent = formatElapsed(elapsedMs);
+
+    winBackdrop.hidden = false;
+    launchConfetti();
+  }
+
+  function closeWin(){
+    winBackdrop.hidden = true;
+    stopConfetti();
+  }
+
+  winCloseBtn.addEventListener('click', closeWin);
+  winBackdrop.addEventListener('click', (e) => {
+    if (e.target === winBackdrop) closeWin();
+  });
+
+  // Small self-contained particle-based confetti burst — no external
+  // libraries, so it works even if a CDN is blocked or you're offline.
+  let confettiRafId = null;
+  const confettiColors = ['#c9a227', '#4c9a6a', '#f4ebd9', '#e08d7c', '#7fb8a4', '#ddb830'];
+
+  function launchConfetti(){
+    const ctx = confettiCanvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+
+    function resize(){
+      confettiCanvas.width = window.innerWidth * dpr;
+      confettiCanvas.height = window.innerHeight * dpr;
+      confettiCanvas.style.width = window.innerWidth + 'px';
+      confettiCanvas.style.height = window.innerHeight + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    resize();
+
+    const particleCount = 160;
+    const particles = [];
+    for (let i = 0; i < particleCount; i++){
+      particles.push({
+        x: window.innerWidth / 2 + (Math.random() - 0.5) * 120,
+        y: window.innerHeight * 0.35 + (Math.random() - 0.5) * 40,
+        vx: (Math.random() - 0.5) * 12,
+        vy: -Math.random() * 14 - 6,
+        size: Math.random() * 8 + 5,
+        color: confettiColors[Math.floor(Math.random() * confettiColors.length)],
+        rotation: Math.random() * 360,
+        spin: (Math.random() - 0.5) * 18,
+        shape: Math.random() < 0.5 ? 'rect' : 'circle',
+      });
+    }
+
+    const gravity = 0.35;
+    const drag = 0.995;
+    const startedAt = performance.now();
+    const durationMs = 3200;
+
+    function frame(now){
+      const elapsed = now - startedAt;
+      ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+      particles.forEach(p => {
+        p.vx *= drag;
+        p.vy = p.vy * drag + gravity;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.rotation += p.spin;
+
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate((p.rotation * Math.PI) / 180);
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = Math.max(0, 1 - elapsed / durationMs);
+        if (p.shape === 'rect'){
+          ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
+        } else {
+          ctx.beginPath();
+          ctx.arc(0, 0, p.size / 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      });
+
+      if (elapsed < durationMs){
+        confettiRafId = requestAnimationFrame(frame);
+      } else {
+        ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      }
+    }
+
+    window.addEventListener('resize', resize);
+    confettiRafId = requestAnimationFrame(frame);
+  }
+
+  function stopConfetti(){
+    if (confettiRafId !== null){
+      cancelAnimationFrame(confettiRafId);
+      confettiRafId = null;
+    }
+    const ctx = confettiCanvas.getContext('2d');
+    ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
   }
 
   // ---- keyboard support ----
@@ -335,6 +472,11 @@
 
   document.addEventListener('keydown', (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+    if (!winBackdrop.hidden){
+      if (e.key === 'Enter' || e.key === 'Escape') closeWin();
+      return;
+    }
 
     if (e.key === 'Backspace'){ e.preventDefault(); backspace(); return; }
     if (e.key === 'Enter'){
