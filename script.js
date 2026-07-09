@@ -95,6 +95,12 @@
     getStats: loadStats,
     resetStats: () => { safeSetLS(LS_STATS_KEY, JSON.stringify(defaultStats())); console.log('Stats reset.'); },
     resetTutorial: () => { try { localStorage.removeItem(LS_TUTORIAL_KEY); } catch(e){} console.log('Tutorial will show again on next reload.'); },
+    resetTodaysSolutions: () => {
+      const byDate = loadAllSolutionsByDate();
+      delete byDate[utcDateKey(new Date())];
+      saveAllSolutionsByDate(byDate);
+      console.log('Today\u2019s solutions cleared — reload to see it take effect.');
+    },
   };
   // ----------------------------------------------------------------------
 
@@ -127,12 +133,17 @@
   const helpPanel = document.getElementById('helpPanel');
   const winBackdrop = document.getElementById('winBackdrop');
   const winCard = document.getElementById('winCard');
+  const winCloseX = document.getElementById('winCloseX');
   const winTimeEl = document.getElementById('winTime');
   const winStreakEl = document.getElementById('winStreak');
   const winAchievementsEl = document.getElementById('winAchievements');
-  const winCloseBtn = document.getElementById('winCloseBtn');
+  const shareBtn = document.getElementById('shareBtn');
+  const keepPlayingBtn = document.getElementById('keepPlayingBtn');
   const confettiCanvas = document.getElementById('confettiCanvas');
   const timerPill = document.getElementById('timerPill');
+  const solutionsCounter = document.getElementById('solutionsCounter');
+  const solutionsCountEl = document.getElementById('solutionsCount');
+  const toastEl = document.getElementById('toast');
   const achvBackdrop = document.getElementById('achvBackdrop');
   const achvCloseBtn = document.getElementById('achvCloseBtn');
   const achvStatsEl = document.getElementById('achvStats');
@@ -148,6 +159,7 @@
   // See the README for the upgrade path if that's ever needed.
   const LS_TUTORIAL_KEY = 'goFigure.tutorialSeen.v1';
   const LS_STATS_KEY = 'goFigure.stats.v1';
+  const LS_SOLUTIONS_KEY = 'goFigure.solutionsByDate.v1';
 
   function safeGetLS(key){
     try { return localStorage.getItem(key); } catch (e){ return null; }
@@ -183,6 +195,53 @@
     safeSetLS(LS_STATS_KEY, JSON.stringify(stats));
   }
 
+  // Solutions found, keyed by UTC date, so today's discoveries survive a
+  // reload but next puzzle day naturally starts from zero. Stored as plain
+  // string arrays (not Sets — JSON doesn't have a Set type).
+  function loadAllSolutionsByDate(){
+    const raw = safeGetLS(LS_SOLUTIONS_KEY);
+    if (!raw) return {};
+    try {
+      const parsed = JSON.parse(raw);
+      return (parsed && typeof parsed === 'object') ? parsed : {};
+    } catch (e){
+      return {};
+    }
+  }
+
+  function saveAllSolutionsByDate(byDate){
+    // Prune to the most recent 30 puzzle-days so this can't grow forever.
+    const dateKeys = Object.keys(byDate).sort();
+    if (dateKeys.length > 30){
+      dateKeys.slice(0, dateKeys.length - 30).forEach(k => delete byDate[k]);
+    }
+    safeSetLS(LS_SOLUTIONS_KEY, JSON.stringify(byDate));
+  }
+
+  function loadTodaysSolutions(){
+    const byDate = loadAllSolutionsByDate();
+    const todayKey = utcDateKey(new Date());
+    return new Set(byDate[todayKey] || []);
+  }
+
+  function persistTodaysSolution(raw){
+    const byDate = loadAllSolutionsByDate();
+    const todayKey = utcDateKey(new Date());
+    if (!byDate[todayKey]) byDate[todayKey] = [];
+    if (!byDate[todayKey].includes(raw)) byDate[todayKey].push(raw);
+    saveAllSolutionsByDate(byDate);
+  }
+  // ----------------------------------------------------------------------
+
+  // firstWinRecorded: true once the puzzle's been solved at least once —
+  // either earlier this session, or (via localStorage) earlier today before
+  // a reload. Gates stats/streak recording so exploring extra solutions
+  // never double-counts them. boardLocked: true only while the win modal is
+  // actively covering the board, to stop clicks leaking through underneath.
+  let solvedSignatures = loadTodaysSolutions();
+  let firstWinRecorded = solvedSignatures.size > 0;
+  let boardLocked = false;
+
   // Each achievement is checked once per win, in order, against the
   // just-updated stats object. Add more here any time — no other code
   // needs to change.
@@ -191,27 +250,44 @@
       id: 'first_win',
       title: 'First Blood',
       desc: 'Solved your first Go Figure puzzle.',
-      check: (stats) => stats.gamesWon === 1,
+      check: (stats, ctx) => stats.gamesWon === 1,
     },
     {
       id: 'speedy',
       title: 'Speed Demon',
       desc: 'Solved a puzzle in under 30 seconds.',
-      check: (stats, elapsedMs) => elapsedMs < 30000,
+      check: (stats, ctx) => ctx.elapsedMs !== null && ctx.elapsedMs < 30000,
     },
     {
       id: 'streak_3',
       title: 'On a Roll',
       desc: '3-day solving streak.',
-      check: (stats) => stats.currentStreak === 3,
+      check: (stats, ctx) => stats.currentStreak === 3,
     },
     {
       id: 'streak_7',
       title: 'Weekly Warrior',
       desc: '7-day solving streak.',
-      check: (stats) => stats.currentStreak === 7,
+      check: (stats, ctx) => stats.currentStreak === 7,
+    },
+    {
+      id: 'explorer',
+      title: 'Explorer',
+      desc: 'Found 3 different solutions to one puzzle.',
+      check: (stats, ctx) => ctx.solutionsCount >= 3,
     },
   ];
+
+  function checkAchievements(stats, ctx){
+    const newlyUnlocked = [];
+    ACHIEVEMENTS.forEach(a => {
+      if (!stats.achievements.includes(a.id) && a.check(stats, ctx)){
+        stats.achievements.push(a.id);
+        newlyUnlocked.push(a);
+      }
+    });
+    return newlyUnlocked;
+  }
 
   function recordWin(elapsedMs){
     const stats = loadStats();
@@ -240,13 +316,7 @@
       stats.lastWonDate = todayKey;
     }
 
-    const newlyUnlocked = [];
-    ACHIEVEMENTS.forEach(a => {
-      if (!stats.achievements.includes(a.id) && a.check(stats, elapsedMs)){
-        stats.achievements.push(a.id);
-        newlyUnlocked.push(a);
-      }
-    });
+    const newlyUnlocked = checkAchievements(stats, { elapsedMs, solutionsCount: 1 });
 
     saveStats(stats);
     return { stats, newlyUnlocked, selfPercentile };
@@ -257,7 +327,6 @@
   // Starts on the very first tile tap (number or operator), stops the
   // moment a correct equation is submitted. Resets on Clear.
   let startTime = null;
-  let hasWon = false;
   let timerInterval = null;
 
   function startTimerIfNeeded(){
@@ -304,7 +373,7 @@
   }
 
   function useNumber(idx, num, btnEl){
-    if (hasWon) return;
+    if (boardLocked) return;
     startTimerIfNeeded();
     equation.push({ type: 'number', display: String(num), value: String(num), numberId: idx });
     btnEl.classList.add('used');
@@ -313,7 +382,7 @@
   }
 
   function useOperator(op, btnEl){
-    if (hasWon) return;
+    if (boardLocked) return;
     startTimerIfNeeded();
     equation.push({ type: 'operator', display: op.display, value: op.value });
     pressAnim(btnEl);
@@ -330,7 +399,7 @@
   }
 
   function backspace(){
-    if (hasWon) return;
+    if (boardLocked) return;
     const last = equation.pop();
     if (!last) return;
     if (last.type === 'number'){
@@ -341,7 +410,7 @@
   }
 
   function clearAll(){
-    if (hasWon) return;
+    if (boardLocked) return;
     equation = [];
     numberTilesEl.querySelectorAll('.tile').forEach(t => t.classList.remove('used'));
     render();
@@ -432,7 +501,7 @@
   }
 
   function submit(){
-    if (hasWon) return;
+    if (boardLocked) return;
 
     const numbersUsed = equation.filter(t => t.type === 'number').length;
     if (numbersUsed < NUMBERS.length){
@@ -459,14 +528,32 @@
 
     const isTrue = Math.abs(left - right) < 1e-9;
     showBadge(isTrue);
-    showStatus(
-      isTrue
-        ? left.toLocaleString() + ' really does equal ' + right.toLocaleString() + '.'
-        : left.toLocaleString() + ' doesn\u2019t equal ' + right.toLocaleString() + '.',
-      isTrue ? 'good' : 'bad'
-    );
 
-    if (isTrue) triggerWin();
+    if (!isTrue){
+      showStatus(left.toLocaleString() + ' doesn\u2019t equal ' + right.toLocaleString() + '.', 'bad');
+      return;
+    }
+
+    if (!firstWinRecorded){
+      firstWinRecorded = true;
+      solvedSignatures.add(raw);
+      persistTodaysSolution(raw);
+      showStatus(left.toLocaleString() + ' really does equal ' + right.toLocaleString() + '.', 'good');
+      triggerWin();
+      return;
+    }
+
+    // Already won once (this session or earlier today) — this is exploration
+    // mode, hunting for additional distinct solutions using the same digits.
+    if (solvedSignatures.has(raw)){
+      showStatus('You already found that one — try a different arrangement!', 'good');
+      return;
+    }
+    solvedSignatures.add(raw);
+    persistTodaysSolution(raw);
+    solutionsCountEl.textContent = solvedSignatures.size;
+    showStatus('Another one! That\u2019s ' + solvedSignatures.size + ' solutions now.', 'good');
+    celebrateExtraSolution();
   }
 
   function showBadge(isTrue){
@@ -482,7 +569,7 @@
 
   // ---- Victory: modal + confetti ----
   function triggerWin(){
-    hasWon = true;
+    boardLocked = true;
     if (timerInterval !== null){ clearInterval(timerInterval); timerInterval = null; }
 
     const elapsedMs = performance.now() - (startTime !== null ? startTime : performance.now());
@@ -499,26 +586,116 @@
     winStreakEl.textContent = [streakText, speedText].filter(Boolean).join(' · ');
 
     winAchievementsEl.innerHTML = '';
-    newlyUnlocked.forEach(a => {
-      const badge = document.createElement('div');
-      badge.className = 'achievement-badge';
-      badge.innerHTML = '<span class="badge-title">🏆 ' + a.title + '</span><span class="badge-desc">' + a.desc + '</span>';
-      winAchievementsEl.appendChild(badge);
-    });
+    newlyUnlocked.forEach(a => winAchievementsEl.appendChild(achievementBadgeEl(a)));
+
+    solutionsCounter.hidden = false;
+    solutionsCountEl.textContent = solvedSignatures.size;
 
     winBackdrop.hidden = false;
     launchConfetti();
   }
 
-  function closeWin(){
-    winBackdrop.hidden = true;
-    stopConfetti();
+  function achievementBadgeEl(a){
+    const badge = document.createElement('div');
+    badge.className = 'achievement-badge';
+    badge.innerHTML = '<span class="badge-title">🏆 ' + a.title + '</span><span class="badge-desc">' + a.desc + '</span>';
+    return badge;
   }
 
-  winCloseBtn.addEventListener('click', closeWin);
+  // Dismissing the modal (X, backdrop click, Escape) and "Keep playing" do
+  // the same thing: hide the modal and free up the board so more solutions
+  // can be tried. The only difference is intent/copy — functionally unified
+  // so there's one mental model instead of two dismissal behaviors.
+  function closeWinAndResetBoard(){
+    winBackdrop.hidden = true;
+    stopConfetti();
+    boardLocked = false;
+    equation = [];
+    numberTilesEl.querySelectorAll('.tile').forEach(t => t.classList.remove('used'));
+    render();
+  }
+
+  winCloseX.addEventListener('click', closeWinAndResetBoard);
+  keepPlayingBtn.addEventListener('click', closeWinAndResetBoard);
   winBackdrop.addEventListener('click', (e) => {
-    if (e.target === winBackdrop) closeWin();
+    if (e.target === winBackdrop) closeWinAndResetBoard();
   });
+
+  // A lighter celebration for extra solutions found after the first win —
+  // no modal, no stats re-recorded, just a quick confetti pop and a check
+  // for the "Explorer" achievement (which can only unlock here).
+  function celebrateExtraSolution(){
+    launchConfetti();
+    const stats = loadStats();
+    const newlyUnlocked = checkAchievements(stats, { elapsedMs: null, solutionsCount: solvedSignatures.size });
+    if (newlyUnlocked.length){
+      saveStats(stats);
+      showToast('🏆 ' + newlyUnlocked.map(a => a.title).join(', ') + ' unlocked!');
+    }
+  }
+
+  let toastTimeoutId = null;
+  function showToast(message){
+    toastEl.textContent = message;
+    toastEl.hidden = false;
+    if (toastTimeoutId !== null) clearTimeout(toastTimeoutId);
+    toastTimeoutId = setTimeout(() => { toastEl.hidden = true; }, 4000);
+  }
+
+  // ---- Share ----
+  function buildShareText(){
+    const lines = ['Go Figure — ' + utcDateKey(new Date())];
+    lines.push('✅ Solved in ' + winTimeEl.textContent);
+    if (winStreakEl.textContent) lines.push(winStreakEl.textContent.replace(' · ', ' — '));
+    lines.push('🧩 ' + solvedSignatures.size + ' solution' + (solvedSignatures.size === 1 ? '' : 's') + ' found');
+    lines.push(location.origin + location.pathname);
+    return lines.join('\n');
+  }
+
+  shareBtn.addEventListener('click', async () => {
+    const text = buildShareText();
+
+    if (navigator.share){
+      try {
+        await navigator.share({ text });
+      } catch (e){
+        // user backed out of the share sheet — not an error, do nothing
+      }
+      return;
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      try {
+        await navigator.clipboard.writeText(text);
+        flashShareButton();
+        return;
+      } catch (e){
+        // fall through to the manual fallback below
+      }
+    }
+
+    fallbackCopy(text);
+    flashShareButton();
+  });
+
+  function flashShareButton(){
+    const original = shareBtn.textContent;
+    shareBtn.textContent = '✅ Copied!';
+    setTimeout(() => { shareBtn.textContent = original; }, 1500);
+  }
+
+  function fallbackCopy(text){
+    // Last resort for browsers without the Clipboard API (older Safari,
+    // non-HTTPS contexts, etc.) — a temporary offscreen textarea + execCommand.
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (e){ /* nothing more we can do */ }
+    document.body.removeChild(ta);
+  }
 
   // Small self-contained particle-based confetti burst — no external
   // libraries, so it works even if a CDN is blocked or you're offline.
@@ -669,7 +846,7 @@
     if (e.metaKey || e.ctrlKey || e.altKey) return;
 
     if (!winBackdrop.hidden){
-      if (e.key === 'Enter' || e.key === 'Escape') closeWin();
+      if (e.key === 'Enter' || e.key === 'Escape') closeWinAndResetBoard();
       return;
     }
     if (!achvBackdrop.hidden){
@@ -721,5 +898,10 @@
   buildNumberTiles();
   buildOperatorTiles();
   render();
+
+  if (solvedSignatures.size > 0){
+    solutionsCounter.hidden = false;
+    solutionsCountEl.textContent = solvedSignatures.size;
+  }
 
 })();
