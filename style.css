@@ -439,6 +439,33 @@ footer{
   font-size: 13px;
 }
 
+.btn-share{
+  background: transparent;
+  border: 1.5px solid var(--tile-shadow);
+  color: var(--tile-ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+.btn-share:hover{
+  background: rgba(201, 162, 39, 0.12);
+  border-color: var(--op-bg);
+}
+.btn-share .share-icon{
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+.btn-share:hover .share-icon{ transform: scale(1.08); }
+
+.btn-share.copied{
+  background: var(--success);
+  border-color: var(--success);
+  color: #fff;
+}
+
 .solutions-counter{
   font-family: 'JetBrains Mono', monospace;
   font-size: 13px;
