@@ -1,0 +1,375 @@
+(function(){
+
+  /* =========================================================
+     CONFIG
+     PUZZLE_BANK is loaded from puzzles.js (see index.html) —
+     that's the file you'll edit daily. OPERATORS lives here
+     since it rarely changes.
+
+     OPERATORS: `display` is what shows on the tile / in the
+     equation, `value` is what's actually evaluated AND what
+     your keyboard key must match to trigger it (so if you add
+     a symbol here, type that exact character to use it).
+     ========================================================= */
+
+  // Falls back to the most recent date on or before today that actually
+  // has an entry, so the game never breaks if you forget to add "today".
+  function getDailyDigits(){
+    const todayKey = utcDateKey(new Date());
+    if (PUZZLE_BANK[todayKey]) return PUZZLE_BANK[todayKey];
+
+    const availableKeys = Object.keys(PUZZLE_BANK).sort();
+    const pastKeys = availableKeys.filter(k => k <= todayKey);
+    if (pastKeys.length){
+      console.warn('Go Figure: no puzzle set for ' + todayKey + ' — reusing ' + pastKeys[pastKeys.length - 1] + '.');
+      return PUZZLE_BANK[pastKeys[pastKeys.length - 1]];
+    }
+
+    console.warn('Go Figure: PUZZLE_BANK is empty — using a placeholder puzzle.');
+    return [1, 2, 3, 4];
+  }
+
+  function utcDateKey(date){
+    const y = date.getUTCFullYear();
+    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(date.getUTCDate()).padStart(2, '0');
+    return y + '-' + m + '-' + d;
+  }
+
+  // ---- Optional authoring helper -------------------------------------
+  // Not used automatically — this is here so you can sanity-check a
+  // candidate puzzle from the browser console before adding it to
+  // PUZZLE_BANK, e.g. GoFigure.isSolvable([7, 9, 7, 9]) -> true/false.
+  // Only checks +-*/ with one "="; a puzzle can still be "solvable" and
+  // dull (like 7,9,7,9), so use this to rule out dead ends, not to pick
+  // the puzzle for you.
+  function permute(arr){
+    if (arr.length <= 1) return [arr];
+    const out = [];
+    for (let i = 0; i < arr.length; i++){
+      const rest = arr.slice(0, i).concat(arr.slice(i + 1));
+      for (const p of permute(rest)) out.push([arr[i]].concat(p));
+    }
+    return out;
+  }
+
+  function evalChain(nums, ops){
+    let str = String(nums[0]);
+    for (let i = 0; i < ops.length; i++) str += ops[i] + nums[i + 1];
+    try {
+      const v = Function('"use strict"; return (' + str + ');')();
+      return typeof v === 'number' && isFinite(v) ? v : NaN;
+    } catch (e){
+      return NaN;
+    }
+  }
+
+  function isSolvable(digits){
+    const basicOps = ['+', '-', '*', '/'];
+    for (const perm of permute(digits)){
+      for (let k = 1; k <= perm.length - 1; k++){
+        const left = perm.slice(0, k);
+        const right = perm.slice(k);
+        const leftSlots = left.length - 1;
+        const rightSlots = right.length - 1;
+        const combos = Math.pow(basicOps.length, leftSlots + rightSlots);
+        for (let c = 0; c < combos; c++){
+          let rem = c;
+          const leftOps = [];
+          for (let i = 0; i < leftSlots; i++){ leftOps.push(basicOps[rem % basicOps.length]); rem = Math.floor(rem / basicOps.length); }
+          const rightOps = [];
+          for (let i = 0; i < rightSlots; i++){ rightOps.push(basicOps[rem % basicOps.length]); rem = Math.floor(rem / basicOps.length); }
+          const l = evalChain(left, leftOps);
+          const r = evalChain(right, rightOps);
+          if (Number.isFinite(l) && Number.isFinite(r) && Math.abs(l - r) < 1e-9) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  window.GoFigure = { isSolvable, PUZZLE_BANK };
+  // ----------------------------------------------------------------------
+
+  const NUMBERS = getDailyDigits();
+
+  const OPERATORS = [
+    { display: '+', value: '+' },
+    { display: '−', value: '-' },
+    { display: '×', value: '*' },
+    { display: '÷', value: '/' },
+    { display: '^', value: '^' },   // exponent, e.g. 2^3 = 8
+    { display: '!', value: '!' },   // factorial, e.g. 3! = 6
+    { display: '%', value: '%' },   // remainder
+    { display: '(', value: '(' },
+    { display: ')', value: ')' },
+    { display: '=', value: '=' },
+  ];
+  /* ========================================================= */
+
+  const numberTilesEl = document.getElementById('numberTiles');
+  const operatorTilesEl = document.getElementById('operatorTiles');
+  const tapeEl = document.getElementById('tape');
+  const tapePlaceholder = document.getElementById('tapePlaceholder');
+  const statusLine = document.getElementById('statusLine');
+  const resultBadge = document.getElementById('resultBadge');
+  const submitBtn = document.getElementById('submitBtn');
+  const backspaceBtn = document.getElementById('backspaceBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const helpBtn = document.getElementById('helpBtn');
+  const helpPanel = document.getElementById('helpPanel');
+
+  // equation is an ordered list of tokens: { type: 'number'|'operator', display, value, numberId? }
+  let equation = [];
+
+  function buildNumberTiles(){
+    numberTilesEl.innerHTML = '';
+    NUMBERS.forEach((num, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'tile';
+      btn.textContent = num;
+      btn.dataset.numberId = idx;
+      btn.setAttribute('aria-label', 'Number ' + num);
+      btn.addEventListener('click', () => useNumber(idx, num, btn));
+      numberTilesEl.appendChild(btn);
+    });
+  }
+
+  function buildOperatorTiles(){
+    operatorTilesEl.innerHTML = '';
+    OPERATORS.forEach(op => {
+      const btn = document.createElement('button');
+      btn.className = 'tile op';
+      btn.textContent = op.display;
+      btn.setAttribute('aria-label', 'Operator ' + op.display);
+      btn.addEventListener('click', () => useOperator(op, btn));
+      operatorTilesEl.appendChild(btn);
+    });
+  }
+
+  function useNumber(idx, num, btnEl){
+    equation.push({ type: 'number', display: String(num), value: String(num), numberId: idx });
+    btnEl.classList.add('used');
+    pressAnim(btnEl);
+    render();
+  }
+
+  function useOperator(op, btnEl){
+    equation.push({ type: 'operator', display: op.display, value: op.value });
+    pressAnim(btnEl);
+    render();
+  }
+
+  function pressAnim(btnEl){
+    btnEl.classList.add('pressed');
+    setTimeout(() => btnEl.classList.remove('pressed'), 90);
+    // Without this, a tile stays focused after being clicked (or activated via
+    // keyboard), so a later Enter press would re-trigger it as a native button
+    // click before our own keydown handler gets to treat Enter as "submit".
+    btnEl.blur();
+  }
+
+  function backspace(){
+    const last = equation.pop();
+    if (!last) return;
+    if (last.type === 'number'){
+      const tile = numberTilesEl.querySelector('[data-number-id="' + last.numberId + '"]');
+      if (tile) tile.classList.remove('used');
+    }
+    render();
+  }
+
+  function clearAll(){
+    equation = [];
+    numberTilesEl.querySelectorAll('.tile').forEach(t => t.classList.remove('used'));
+    render();
+  }
+
+  function render(){
+    tapeEl.querySelectorAll('.tape-token').forEach(el => el.remove());
+    if (equation.length === 0){
+      tapePlaceholder.style.display = 'inline';
+    } else {
+      tapePlaceholder.style.display = 'none';
+      equation.forEach((tok, i) => {
+        const span = document.createElement('span');
+        span.className = 'tape-token' + (tok.type === 'operator' ? ' op' : '');
+        span.textContent = tok.display;
+        // numbers played back to back sit tight against each other to read as one concatenated number
+        const prev = equation[i - 1];
+        if (tok.type === 'number' && prev && prev.type === 'number'){
+          span.style.marginLeft = '0px';
+        }
+        tapeEl.insertBefore(span, tapeEl.querySelector('.cursor'));
+      });
+    }
+
+    // reset result feedback whenever the equation changes
+    resultBadge.classList.remove('show', 'good', 'bad');
+    statusLine.textContent = '';
+    statusLine.className = 'status-line';
+
+    const equalsCount = equation.filter(t => t.value === '=').length;
+    submitBtn.disabled = equation.length === 0 || equalsCount !== 1;
+  }
+
+  // Turns "3!" into "fact(3)" and "(2+2)!" into "fact((2+2))" so a plain JS eval can handle it.
+  function applyFactorials(str){
+    let out = str;
+    let guard = 0;
+    while (out.includes('!') && guard < 50){
+      guard++;
+      const idx = out.indexOf('!');
+      let start;
+      if (out[idx - 1] === ')'){
+        let depth = 0;
+        let i = idx - 1;
+        for (; i >= 0; i--){
+          if (out[i] === ')') depth++;
+          else if (out[i] === '('){
+            depth--;
+            if (depth === 0){ start = i; break; }
+          }
+        }
+        if (start === undefined) return null; // unbalanced parens
+      } else {
+        let i = idx - 1;
+        while (i >= 0 && /[0-9.]/.test(out[i])) i--;
+        start = i + 1;
+        if (start === idx) return null; // "!" with nothing before it
+      }
+      const operand = out.slice(start, idx);
+      out = out.slice(0, start) + 'fact(' + operand + ')' + out.slice(idx + 1);
+    }
+    return out;
+  }
+
+  function factorial(n){
+    n = Number(n);
+    if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) return NaN;
+    if (n > 170) return Infinity;
+    let result = 1;
+    for (let i = 2; i <= n; i++) result *= i;
+    return result;
+  }
+
+  function evaluateSide(str){
+    if (!/^[0-9+\-*/^!%().\s]+$/.test(str) || str.trim() === ''){
+      return null;
+    }
+    const withFact = applyFactorials(str);
+    if (withFact === null) return null;
+    const withPow = withFact.replace(/\^/g, '**');
+    try {
+      const fn = new Function('fact', '"use strict"; return (' + withPow + ');');
+      const result = fn(factorial);
+      return typeof result === 'number' && isFinite(result) ? result : null;
+    } catch (e){
+      return null;
+    }
+  }
+
+  function submit(){
+    const numbersUsed = equation.filter(t => t.type === 'number').length;
+    if (numbersUsed < NUMBERS.length){
+      showBadge(false);
+      showStatus('Use all ' + NUMBERS.length + ' numbers — ' + (NUMBERS.length - numbersUsed) + ' still unplayed.', 'bad');
+      return;
+    }
+
+    const raw = equation.map(t => t.value).join('');
+    const parts = raw.split('=');
+    if (parts.length !== 2){
+      showStatus('Add exactly one "=" to check an equation.', 'bad');
+      return;
+    }
+
+    const left = evaluateSide(parts[0]);
+    const right = evaluateSide(parts[1]);
+
+    if (left === null || right === null){
+      showStatus("That expression doesn't quite compute — check both sides.", 'bad');
+      showBadge(false);
+      return;
+    }
+
+    const isTrue = Math.abs(left - right) < 1e-9;
+    showBadge(isTrue);
+    showStatus(
+      isTrue
+        ? left.toLocaleString() + ' really does equal ' + right.toLocaleString() + '.'
+        : left.toLocaleString() + ' doesn\u2019t equal ' + right.toLocaleString() + '.',
+      isTrue ? 'good' : 'bad'
+    );
+  }
+
+  function showBadge(isTrue){
+    resultBadge.textContent = isTrue ? '✓' : '✕';
+    resultBadge.classList.remove('good', 'bad');
+    resultBadge.classList.add(isTrue ? 'good' : 'bad', 'show');
+  }
+
+  function showStatus(msg, kind){
+    statusLine.textContent = msg;
+    statusLine.className = 'status-line ' + kind;
+  }
+
+  // ---- keyboard support ----
+  function tryTypeNumber(digit){
+    const btns = numberTilesEl.querySelectorAll('.tile:not(.used)');
+    for (const btn of btns){
+      if (btn.textContent === digit){ btn.click(); return true; }
+    }
+    return false;
+  }
+
+  function tryTypeOperator(key){
+    const op = OPERATORS.find(o => o.value === key);
+    if (!op) return false;
+    const btns = operatorTilesEl.querySelectorAll('.tile');
+    for (const btn of btns){
+      if (btn.textContent === op.display){ btn.click(); return true; }
+    }
+    return false;
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+    if (e.key === 'Backspace'){ e.preventDefault(); backspace(); return; }
+    if (e.key === 'Enter'){
+      e.preventDefault();
+      if (!submitBtn.disabled) submit();
+      return;
+    }
+    if (e.key === 'Escape'){ closeHelp(); return; }
+
+    if (/^[0-9]$/.test(e.key)){
+      if (tryTypeNumber(e.key)) e.preventDefault();
+      return;
+    }
+    if (tryTypeOperator(e.key)) e.preventDefault();
+  });
+
+  // ---- help popover ----
+  function openHelp(){
+    helpPanel.hidden = false;
+    helpBtn.setAttribute('aria-expanded', 'true');
+  }
+  function closeHelp(){
+    helpPanel.hidden = true;
+    helpBtn.setAttribute('aria-expanded', 'false');
+  }
+  helpBtn.addEventListener('click', () => {
+    helpPanel.hidden ? openHelp() : closeHelp();
+  });
+
+  backspaceBtn.addEventListener('click', backspace);
+  clearBtn.addEventListener('click', clearAll);
+  submitBtn.addEventListener('click', submit);
+
+  buildNumberTiles();
+  buildOperatorTiles();
+  render();
+
+})();

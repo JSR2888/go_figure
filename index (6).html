@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go Figure — Equation Checker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header>
+    <div class="eyebrow">you do the math</div>
+    <h1>Go Figure</h1>
+    <button class="help-btn" id="helpBtn" aria-expanded="false" aria-controls="helpPanel">
+      <span class="mark">?</span> How this works
+    </button>
+    <div class="help-panel" id="helpPanel" hidden>
+      Tap tiles — or just type on your keyboard — to build an equation on the tape.
+      <strong>Numbers</strong> get used up once played; <strong>operators</strong> stick around for reuse.
+      Play two numbers back to back with nothing between them to <strong>concatenate</strong> them into a bigger
+      number — tap 1 then 2 to get 12, so 1, 2, 3, 4 can prove <strong>12 ÷ 3 = 4</strong>.
+      Beyond the basics, you've also got <strong>^</strong> for exponents, <strong>!</strong> for factorials, and
+      <strong>%</strong> for remainders. Use every number and add exactly one <strong>=</strong>, then press
+      <strong>Check equation</strong> (or hit Enter) to see if both sides really match.
+    </div>
+  </header>
+
+  <div class="rig">
+    <div class="tape-wrap">
+      <div class="tape" id="tape">
+        <span class="tape-placeholder" id="tapePlaceholder">tap or type to start…</span>
+        <span class="cursor"></span>
+      </div>
+      <div class="tape-tear"></div>
+      <div class="result-badge" id="resultBadge"></div>
+    </div>
+    <div class="status-line" id="statusLine"></div>
+
+    <div class="rack">
+      <span class="rack-label">Numbers</span>
+      <div class="tiles" id="numberTiles"></div>
+    </div>
+
+    <div class="rack">
+      <span class="rack-label">Operators</span>
+      <div class="tiles" id="operatorTiles"></div>
+    </div>
+
+    <div class="controls">
+      <button class="btn btn-ghost" id="backspaceBtn">⌫ Backspace</button>
+      <button class="btn btn-ghost" id="clearBtn">Clear</button>
+      <button class="btn btn-submit" id="submitBtn" disabled>Check equation</button>
+    </div>
+  </div>
+
+  <footer>
+    Numbers vanish once used and only come back with Backspace or Clear.<br>
+    Operators are reusable — grab the same one as many times as you like.
+  </footer>
+
+  <!-- puzzles.js must load before script.js — it defines PUZZLE_BANK -->
+  <script src="puzzles.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
