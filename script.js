@@ -88,7 +88,14 @@
     return false;
   }
 
-  window.GoFigure = { isSolvable, PUZZLE_BANK };
+  window.GoFigure = {
+    isSolvable,
+    PUZZLE_BANK,
+    // Debugging helpers — run these from the browser console:
+    getStats: loadStats,
+    resetStats: () => { safeSetLS(LS_STATS_KEY, JSON.stringify(defaultStats())); console.log('Stats reset.'); },
+    resetTutorial: () => { try { localStorage.removeItem(LS_TUTORIAL_KEY); } catch(e){} console.log('Tutorial will show again on next reload.'); },
+  };
   // ----------------------------------------------------------------------
 
   const NUMBERS = getDailyDigits();
@@ -121,20 +128,132 @@
   const winBackdrop = document.getElementById('winBackdrop');
   const winCard = document.getElementById('winCard');
   const winTimeEl = document.getElementById('winTime');
+  const winStreakEl = document.getElementById('winStreak');
+  const winAchievementsEl = document.getElementById('winAchievements');
   const winCloseBtn = document.getElementById('winCloseBtn');
   const confettiCanvas = document.getElementById('confettiCanvas');
+  const timerPill = document.getElementById('timerPill');
 
   // equation is an ordered list of tokens: { type: 'number'|'operator', display, value, numberId? }
   let equation = [];
+
+  // ---- Persistent, no-login storage (localStorage) --------------------
+  // Everything here lives only in this browser on this device. No account,
+  // no server — which also means no cross-device sync and no leaderboard.
+  // See the README for the upgrade path if that's ever needed.
+  const LS_TUTORIAL_KEY = 'goFigure.tutorialSeen.v1';
+  const LS_STATS_KEY = 'goFigure.stats.v1';
+
+  function safeGetLS(key){
+    try { return localStorage.getItem(key); } catch (e){ return null; }
+  }
+  function safeSetLS(key, value){
+    try { localStorage.setItem(key, value); } catch (e){ /* private mode, storage full, etc — fail silently */ }
+  }
+
+  function defaultStats(){
+    return {
+      gamesWon: 0,
+      bestTimeMs: null,
+      currentStreak: 0,
+      longestStreak: 0,
+      lastWonDate: null,   // UTC date key, e.g. '2026-07-09'
+      achievements: [],    // array of achievement ids already unlocked
+    };
+  }
+
+  function loadStats(){
+    const raw = safeGetLS(LS_STATS_KEY);
+    if (!raw) return defaultStats();
+    try {
+      const parsed = JSON.parse(raw);
+      return Object.assign(defaultStats(), parsed);
+    } catch (e){
+      return defaultStats();
+    }
+  }
+
+  function saveStats(stats){
+    safeSetLS(LS_STATS_KEY, JSON.stringify(stats));
+  }
+
+  // Each achievement is checked once per win, in order, against the
+  // just-updated stats object. Add more here any time — no other code
+  // needs to change.
+  const ACHIEVEMENTS = [
+    {
+      id: 'first_win',
+      title: 'First Blood',
+      desc: 'Solved your first Go Figure puzzle.',
+      check: (stats) => stats.gamesWon === 1,
+    },
+    {
+      id: 'speedy',
+      title: 'Speed Demon',
+      desc: 'Solved a puzzle in under 30 seconds.',
+      check: (stats, elapsedMs) => elapsedMs < 30000,
+    },
+    {
+      id: 'streak_3',
+      title: 'On a Roll',
+      desc: '3-day solving streak.',
+      check: (stats) => stats.currentStreak === 3,
+    },
+    {
+      id: 'streak_7',
+      title: 'Weekly Warrior',
+      desc: '7-day solving streak.',
+      check: (stats) => stats.currentStreak === 7,
+    },
+  ];
+
+  function recordWin(elapsedMs){
+    const stats = loadStats();
+    const todayKey = utcDateKey(new Date());
+
+    stats.gamesWon += 1;
+    if (stats.bestTimeMs === null || elapsedMs < stats.bestTimeMs){
+      stats.bestTimeMs = elapsedMs;
+    }
+
+    if (stats.lastWonDate === todayKey){
+      // already recorded a win today (e.g. page reload) — don't double-count streak
+    } else {
+      const yesterdayKey = utcDateKey(new Date(Date.now() - 86400000));
+      stats.currentStreak = (stats.lastWonDate === yesterdayKey) ? stats.currentStreak + 1 : 1;
+      stats.longestStreak = Math.max(stats.longestStreak, stats.currentStreak);
+      stats.lastWonDate = todayKey;
+    }
+
+    const newlyUnlocked = [];
+    ACHIEVEMENTS.forEach(a => {
+      if (!stats.achievements.includes(a.id) && a.check(stats, elapsedMs)){
+        stats.achievements.push(a.id);
+        newlyUnlocked.push(a);
+      }
+    });
+
+    saveStats(stats);
+    return { stats, newlyUnlocked };
+  }
+  // ----------------------------------------------------------------------
 
   // ---- Timer ----
   // Starts on the very first tile tap (number or operator), stops the
   // moment a correct equation is submitted. Resets on Clear.
   let startTime = null;
   let hasWon = false;
+  let timerInterval = null;
 
-  function markStartIfNeeded(){
-    if (startTime === null) startTime = performance.now();
+  function startTimerIfNeeded(){
+    if (startTime !== null) return;
+    startTime = performance.now();
+    timerInterval = setInterval(updateTimerDisplay, 200);
+  }
+
+  function updateTimerDisplay(){
+    if (startTime === null) return;
+    timerPill.textContent = '⏱ ' + formatElapsed(performance.now() - startTime);
   }
 
   function formatElapsed(ms){
@@ -171,7 +290,7 @@
 
   function useNumber(idx, num, btnEl){
     if (hasWon) return;
-    markStartIfNeeded();
+    startTimerIfNeeded();
     equation.push({ type: 'number', display: String(num), value: String(num), numberId: idx });
     btnEl.classList.add('used');
     pressAnim(btnEl);
@@ -180,7 +299,7 @@
 
   function useOperator(op, btnEl){
     if (hasWon) return;
-    markStartIfNeeded();
+    startTimerIfNeeded();
     equation.push({ type: 'operator', display: op.display, value: op.value });
     pressAnim(btnEl);
     render();
@@ -349,8 +468,24 @@
   // ---- Victory: modal + confetti ----
   function triggerWin(){
     hasWon = true;
+    if (timerInterval !== null){ clearInterval(timerInterval); timerInterval = null; }
+
     const elapsedMs = performance.now() - (startTime !== null ? startTime : performance.now());
     winTimeEl.textContent = formatElapsed(elapsedMs);
+
+    const { stats, newlyUnlocked } = recordWin(elapsedMs);
+
+    winStreakEl.textContent = stats.currentStreak > 1
+      ? '🔥 ' + stats.currentStreak + '-day streak'
+      : (stats.currentStreak === 1 ? 'First day of a new streak — come back tomorrow!' : '');
+
+    winAchievementsEl.innerHTML = '';
+    newlyUnlocked.forEach(a => {
+      const badge = document.createElement('div');
+      badge.className = 'achievement-badge';
+      badge.innerHTML = '<span class="badge-title">🏆 ' + a.title + '</span><span class="badge-desc">' + a.desc + '</span>';
+      winAchievementsEl.appendChild(badge);
+    });
 
     winBackdrop.hidden = false;
     launchConfetti();
@@ -505,6 +640,15 @@
   helpBtn.addEventListener('click', () => {
     helpPanel.hidden ? openHelp() : closeHelp();
   });
+
+  // First-ever visit (per browser): pop the instructions open automatically
+  // so new players aren't dropped in cold. Every visit after that, it stays
+  // closed by default — same idea as Squaredle not re-showing its tutorial —
+  // and players can still reopen it manually any time via "How this works."
+  if (!safeGetLS(LS_TUTORIAL_KEY)){
+    openHelp();
+    safeSetLS(LS_TUTORIAL_KEY, '1');
+  }
 
   backspaceBtn.addEventListener('click', backspace);
   clearBtn.addEventListener('click', clearAll);
