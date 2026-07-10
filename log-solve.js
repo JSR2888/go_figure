@@ -1,9 +1,11 @@
 // netlify/functions/log-solve.js
 //
-// Receives a solve (or an updated solutions count) from the browser and
-// upserts it into Supabase. This is the ONLY thing on the server side
-// that's allowed to touch the database directly — the browser never sees
-// the Supabase service-role key, only this function does (via env vars).
+// Receives a solve (or an updated solutions count) from the browser,
+// upserts it into Supabase, then computes and returns this player's rank
+// for today's puzzle — both by speed and by solutions found. This is the
+// ONLY thing on the server side that's allowed to touch the database
+// directly — the browser never sees the Supabase service-role key, only
+// this function does (via env vars).
 //
 // Env vars needed (set in Netlify: Site configuration → Environment variables):
 //   SUPABASE_URL              — from Supabase: Project Settings → API
@@ -54,7 +56,8 @@ exports.handler = async (event) => {
   // Upsert: first solve of the day inserts a row; later calls (more
   // solutions found in explore mode) update the same row instead of
   // creating duplicates. time_ms only ever reflects the FIRST win — we
-  // don't overwrite it on later exploration submits.
+  // don't overwrite it on later exploration submits, since that's the
+  // number the speed leaderboard is ranked on.
   const { data: existing, error: fetchError } = await supabase
     .from('solves')
     .select('id, time_ms, solutions_count')
@@ -66,11 +69,17 @@ exports.handler = async (event) => {
     return { statusCode: 500, body: 'Database error: ' + fetchError.message };
   }
 
+  let finalTimeMs = body.timeMs;
+  let finalSolutionsCount = body.solutionsCount;
+
   if (existing){
+    finalTimeMs = existing.time_ms; // never overwritten after the first insert
+    finalSolutionsCount = Math.max(existing.solutions_count, body.solutionsCount);
+
     const { error: updateError } = await supabase
       .from('solves')
       .update({
-        solutions_count: Math.max(existing.solutions_count, body.solutionsCount),
+        solutions_count: finalSolutionsCount,
         updated_at: new Date().toISOString(),
       })
       .eq('id', existing.id);
@@ -84,8 +93,8 @@ exports.handler = async (event) => {
       .insert({
         puzzle_date: body.puzzleDate,
         client_id: body.clientId,
-        time_ms: body.timeMs,
-        solutions_count: body.solutionsCount,
+        time_ms: finalTimeMs,
+        solutions_count: finalSolutionsCount,
       });
 
     if (insertError){
@@ -93,9 +102,48 @@ exports.handler = async (event) => {
     }
   }
 
+  // ---- Rank computation ----
+  // Three cheap count queries. Ranks are 1-indexed and computed as
+  // "how many people beat me, plus one" — ties all land on the same rank
+  // rather than being arbitrarily broken, which is the friendlier choice
+  // for a small daily leaderboard.
+  const { count: totalPlayers, error: totalError } = await supabase
+    .from('solves')
+    .select('id', { count: 'exact', head: true })
+    .eq('puzzle_date', body.puzzleDate);
+
+  const { count: fasterCount, error: fasterError } = await supabase
+    .from('solves')
+    .select('id', { count: 'exact', head: true })
+    .eq('puzzle_date', body.puzzleDate)
+    .lt('time_ms', finalTimeMs);
+
+  const { count: moreSolutionsCount, error: solutionsError } = await supabase
+    .from('solves')
+    .select('id', { count: 'exact', head: true })
+    .eq('puzzle_date', body.puzzleDate)
+    .gt('solutions_count', finalSolutionsCount);
+
+  if (totalError || fasterError || solutionsError){
+    // The write already succeeded — ranks are a nice-to-have, so degrade
+    // gracefully instead of returning an error the client would have to
+    // handle specially.
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ok: true, ranksAvailable: false }),
+    };
+  }
+
   return {
     statusCode: 200,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ok: true }),
+    body: JSON.stringify({
+      ok: true,
+      ranksAvailable: true,
+      totalPlayers: totalPlayers || 1,
+      speedRank: (fasterCount || 0) + 1,
+      solutionsRank: (moreSolutionsCount || 0) + 1,
+    }),
   };
 };
