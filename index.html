@@ -29,34 +29,82 @@
       <strong>Check equation</strong> (or hit Enter) to see if both sides really match. Remember, there may be more than one solution! Good luck!
     </div>
   </header>
-  <div class="rig">
-    <div class="tape-wrap">
-      <div class="timer-pill" id="timerPill">⏱ 0:00</div>
-      <div class="tape" id="tape">
-        <span class="cursor"></span>
-        <span class="tape-placeholder" id="tapePlaceholder">Tap or type to start…</span>
+  <div class="rig" id="rig">
+    <div class="play-area" id="playArea">
+      <div class="tape-wrap">
+        <div class="timer-pill" id="timerPill">⏱ 0:00</div>
+        <div class="tape" id="tape">
+          <span class="cursor"></span>
+          <span class="tape-placeholder" id="tapePlaceholder">Tap or type to start…</span>
+        </div>
+        <div class="result-badge" id="resultBadge"></div>
       </div>
-      <div class="result-badge" id="resultBadge"></div>
+      <div class="status-line" id="statusLine"></div>
+      <div class="solutions-counter" id="solutionsCounter" hidden>🧩 Solutions found: <span id="solutionsCount">0</span></div>
+      <div class="rack">
+        <span class="rack-label">Numbers</span>
+        <div class="tiles" id="numberTiles"></div>
+      </div>
+      <div class="rack">
+        <span class="rack-label">Operators</span>
+        <div class="tiles" id="operatorTiles"></div>
+      </div>
+      <div class="controls">
+        <button class="btn btn-ghost" id="backspaceBtn">⌫ Backspace</button>
+        <button class="btn btn-ghost" id="clearBtn">Clear</button>
+        <button class="btn btn-submit" id="submitBtn" disabled>Check equation</button>
+      </div>
     </div>
-    <div class="status-line" id="statusLine"></div>
-    <div class="solutions-counter" id="solutionsCounter" hidden>🧩 Solutions found: <span id="solutionsCount">0</span></div>
-    <div class="rack">
-      <span class="rack-label">Numbers</span>
-      <div class="tiles" id="numberTiles"></div>
-    </div>
-    <div class="rack">
-      <span class="rack-label">Operators</span>
-      <div class="tiles" id="operatorTiles"></div>
-    </div>
-    <div class="controls">
-      <button class="btn btn-ghost" id="backspaceBtn">⌫ Backspace</button>
-      <button class="btn btn-ghost" id="clearBtn">Clear</button>
-      <button class="btn btn-submit" id="submitBtn" disabled>Check equation</button>
+
+    <!-- Shown to returning players instead of jumping straight into a running timer -->
+    <div class="start-gate" id="startGate" hidden>
+      <div class="start-gate-inner">
+        <div class="start-gate-emoji">🧮</div>
+        <h2>Ready when you are</h2>
+        <p>Today's puzzle has <strong><span id="startGateDigitCount"></span></strong> numbers waiting. The timer starts the moment you hit go.</p>
+        <button class="btn btn-submit" id="startGateBtn">▶ Start puzzle</button>
+      </div>
     </div>
   </div>
   <footer>
     Thanks for playing!
   </footer>
+
+  <!-- Guided tutorial: shown automatically on a player's first-ever visit -->
+  <div class="tutorial-backdrop" id="tutorialBackdrop" hidden>
+    <div class="tutorial-card" role="dialog" aria-modal="true" aria-labelledby="tutTitle">
+      <div class="tutorial-header">
+        <span class="tutorial-step-label" id="tutStepLabel">Step 1 of 4</span>
+        <button class="tutorial-skip" id="tutSkipBtn">Skip tutorial</button>
+      </div>
+      <h2 id="tutTitle">The basics</h2>
+      <p class="tutorial-instruction" id="tutInstruction"></p>
+
+      <div class="tape-wrap">
+        <div class="tape" id="tutTape">
+          <span class="cursor"></span>
+          <span class="tape-placeholder" id="tutPlaceholder">Tap to start…</span>
+        </div>
+        <div class="result-badge" id="tutResultBadge"></div>
+      </div>
+      <div class="status-line" id="tutStatusLine"></div>
+
+      <div class="rack">
+        <span class="rack-label">Numbers</span>
+        <div class="tiles" id="tutNumberTiles"></div>
+      </div>
+      <div class="rack">
+        <span class="rack-label">Operators</span>
+        <div class="tiles" id="tutOperatorTiles"></div>
+      </div>
+
+      <div class="controls">
+        <button class="btn btn-ghost" id="tutBackspaceBtn">⌫ Backspace</button>
+        <button class="btn btn-ghost" id="tutClearBtn">Clear</button>
+        <button class="btn btn-submit" id="tutCheckBtn" disabled>Check</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Achievements panel -->
   <div class="sheet-backdrop" id="achvBackdrop" hidden>
