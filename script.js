@@ -151,6 +151,26 @@
   const achvListEl = document.getElementById('achvList');
   const achievementsBtn = document.getElementById('achievementsBtn');
 
+  const playAreaEl = document.getElementById('playArea');
+  const startGateEl = document.getElementById('startGate');
+  const startGateBtn = document.getElementById('startGateBtn');
+  const startGateDigitCount = document.getElementById('startGateDigitCount');
+
+  const tutorialBackdrop = document.getElementById('tutorialBackdrop');
+  const tutStepLabel = document.getElementById('tutStepLabel');
+  const tutSkipBtn = document.getElementById('tutSkipBtn');
+  const tutTitleEl = document.getElementById('tutTitle');
+  const tutInstructionEl = document.getElementById('tutInstruction');
+  const tutTapeEl = document.getElementById('tutTape');
+  const tutPlaceholderEl = document.getElementById('tutPlaceholder');
+  const tutResultBadge = document.getElementById('tutResultBadge');
+  const tutStatusLine = document.getElementById('tutStatusLine');
+  const tutNumberTilesEl = document.getElementById('tutNumberTiles');
+  const tutOperatorTilesEl = document.getElementById('tutOperatorTiles');
+  const tutBackspaceBtn = document.getElementById('tutBackspaceBtn');
+  const tutClearBtn = document.getElementById('tutClearBtn');
+  const tutCheckBtn = document.getElementById('tutCheckBtn');
+
   // equation is an ordered list of tokens: { type: 'number'|'operator', display, value, numberId? }
   let equation = [];
 
@@ -242,6 +262,10 @@
   let solvedSignatures = loadTodaysSolutions();
   let firstWinRecorded = solvedSignatures.size > 0;
   let boardLocked = false;
+  // false until the tutorial finishes (first-timers) or the start gate is
+  // clicked (returning players) — blocks all main-game interaction before
+  // that, since the digits shouldn't be usable while they're hidden anyway.
+  let puzzleStarted = false;
 
   // Each achievement is checked once per win, in order, against the
   // just-updated stats object. Add more here any time — no other code
@@ -348,6 +372,20 @@
     return minutes + ':' + String(seconds).padStart(2, '0');
   }
 
+  // ---- Start gate (returning players) ----
+  // Digits stay hidden behind a blur until this runs, so the timer only
+  // ever starts when the player is actually ready — either by clicking
+  // "Start puzzle" here, or automatically the moment a first-time player
+  // finishes the guided tutorial (see finishTutorial()).
+  function revealAndStart(){
+    startGateEl.hidden = true;
+    playAreaEl.classList.remove('gated');
+    puzzleStarted = true;
+    startTimerIfNeeded();
+  }
+
+  startGateBtn.addEventListener('click', revealAndStart);
+
   function buildNumberTiles(){
     numberTilesEl.innerHTML = '';
     NUMBERS.forEach((num, idx) => {
@@ -374,7 +412,7 @@
   }
 
   function useNumber(idx, num, btnEl){
-    if (boardLocked) return;
+    if (boardLocked || !puzzleStarted) return;
     startTimerIfNeeded();
     equation.push({ type: 'number', display: String(num), value: String(num), numberId: idx });
     btnEl.classList.add('used');
@@ -383,7 +421,7 @@
   }
 
   function useOperator(op, btnEl){
-    if (boardLocked) return;
+    if (boardLocked || !puzzleStarted) return;
     startTimerIfNeeded();
     equation.push({ type: 'operator', display: op.display, value: op.value });
     pressAnim(btnEl);
@@ -400,7 +438,7 @@
   }
 
   function backspace(){
-    if (boardLocked) return;
+    if (boardLocked || !puzzleStarted) return;
     const last = equation.pop();
     if (!last) return;
     if (last.type === 'number'){
@@ -411,7 +449,7 @@
   }
 
   function clearAll(){
-    if (boardLocked) return;
+    if (boardLocked || !puzzleStarted) return;
     equation = [];
     numberTilesEl.querySelectorAll('.tile').forEach(t => t.classList.remove('used'));
     render();
@@ -502,7 +540,7 @@
   }
 
   function submit(){
-    if (boardLocked) return;
+    if (boardLocked || !puzzleStarted) return;
 
     const numbersUsed = equation.filter(t => t.type === 'number').length;
     if (numbersUsed < NUMBERS.length){
@@ -858,6 +896,12 @@
       if (e.key === 'Enter' || e.key === 'Escape') closeAchievements();
       return;
     }
+    if (!tutorialBackdrop.hidden){
+      // Tutorial tiles are tap-only by design (small, step-specific digit
+      // sets) — just make sure no keystroke leaks through to the hidden
+      // main puzzle underneath.
+      return;
+    }
 
     if (e.key === 'Backspace'){ e.preventDefault(); backspace(); return; }
     if (e.key === 'Enter'){
@@ -874,7 +918,8 @@
     if (tryTypeOperator(e.key)) e.preventDefault();
   });
 
-  // ---- help popover ----
+  // ---- help popover (now purely on-demand — first-time onboarding is the
+  // guided tutorial below, not this panel auto-opening) ----
   function openHelp(){
     helpPanel.hidden = false;
     helpBtn.setAttribute('aria-expanded', 'true');
@@ -887,14 +932,207 @@
     helpPanel.hidden ? openHelp() : closeHelp();
   });
 
-  // First-ever visit (per browser): pop the instructions open automatically
-  // so new players aren't dropped in cold. Every visit after that, it stays
-  // closed by default — same idea as Squaredle not re-showing its tutorial —
-  // and players can still reopen it manually any time via "How this works."
-  if (!safeGetLS(LS_TUTORIAL_KEY)){
-    openHelp();
-    safeSetLS(LS_TUTORIAL_KEY, '1');
+  // ---- Guided tutorial (first-time players only) ------------------------
+  // Each step is its own tiny self-contained puzzle with its own digits,
+  // reusing the exact same tile/tape/eval logic as the real game so it
+  // feels identical to actually playing — just smaller and instructive.
+  const TUTORIAL_STEPS = [
+    {
+      digits: [1, 2, 3],
+      title: 'The basics',
+      instruction: 'Your goal is to build a true equation using every number you\u2019re given. Try proving <strong>1 + 2 = 3</strong>.',
+      concept: null,
+    },
+    {
+      digits: [1, 2, 3, 4],
+      title: 'Combining digits',
+      instruction: 'Play two numbers back-to-back with nothing between them and they combine into one bigger number. Try <strong>12 ÷ 3 = 4</strong>.',
+      concept: 'concat',
+      conceptHint: 'Correct math, but try combining two digits into one this time — tap 1, then 2, to get 12.',
+    },
+    {
+      digits: [2, 3, 5],
+      title: 'Remainders',
+      instruction: '<strong>%</strong> gives you the remainder left over after dividing. Try <strong>5 % 3 = 2</strong>.',
+      concept: 'percent',
+      conceptHint: 'Correct math, but try using the % operator this time.',
+    },
+    {
+      digits: [3, 4, 6],
+      title: 'Factorials',
+      instruction: '<strong>!</strong> means factorial — multiply the number by every whole number below it. Try <strong>3! = 6</strong> (that\u2019s 3 × 2 × 1).',
+      concept: 'factorial',
+      conceptHint: 'Correct math, but try using the ! operator this time.',
+    },
+  ];
+
+  let tutStepIndex = 0;
+  let tutEquation = [];
+
+  function buildTutNumberTiles(digits){
+    tutNumberTilesEl.innerHTML = '';
+    digits.forEach((num, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'tile';
+      btn.textContent = num;
+      btn.dataset.numberId = idx;
+      btn.setAttribute('aria-label', 'Number ' + num);
+      btn.addEventListener('click', () => {
+        tutEquation.push({ type: 'number', display: String(num), value: String(num), numberId: idx });
+        btn.classList.add('used');
+        pressAnim(btn);
+        renderTutTape();
+      });
+      tutNumberTilesEl.appendChild(btn);
+    });
   }
+
+  function buildTutOperatorTiles(){
+    tutOperatorTilesEl.innerHTML = '';
+    OPERATORS.forEach(op => {
+      const btn = document.createElement('button');
+      btn.className = 'tile op';
+      btn.textContent = op.display;
+      btn.setAttribute('aria-label', 'Operator ' + op.display);
+      btn.addEventListener('click', () => {
+        tutEquation.push({ type: 'operator', display: op.display, value: op.value });
+        pressAnim(btn);
+        renderTutTape();
+      });
+      tutOperatorTilesEl.appendChild(btn);
+    });
+  }
+
+  function renderTutTape(){
+    tutTapeEl.querySelectorAll('.tape-token').forEach(el => el.remove());
+    if (tutEquation.length === 0){
+      tutPlaceholderEl.style.display = 'inline';
+    } else {
+      tutPlaceholderEl.style.display = 'none';
+      tutEquation.forEach((tok, i) => {
+        const span = document.createElement('span');
+        span.className = 'tape-token' + (tok.type === 'operator' ? ' op' : '');
+        span.textContent = tok.display;
+        const prev = tutEquation[i - 1];
+        if (tok.type === 'number' && prev && prev.type === 'number'){
+          span.style.marginLeft = '0px';
+        }
+        tutTapeEl.insertBefore(span, tutTapeEl.querySelector('.cursor'));
+      });
+    }
+    tutResultBadge.classList.remove('show', 'good', 'bad');
+    tutStatusLine.textContent = '';
+    tutStatusLine.className = 'status-line';
+    const equalsCount = tutEquation.filter(t => t.value === '=').length;
+    tutCheckBtn.disabled = tutEquation.length === 0 || equalsCount !== 1;
+  }
+
+  function tutHasConcatenation(){
+    return tutEquation.some((t, i) => t.type === 'number' && i > 0 && tutEquation[i - 1].type === 'number');
+  }
+
+  function loadTutorialStep(i){
+    tutStepIndex = i;
+    tutEquation = [];
+    const step = TUTORIAL_STEPS[i];
+    tutStepLabel.textContent = 'Step ' + (i + 1) + ' of ' + TUTORIAL_STEPS.length;
+    tutTitleEl.textContent = step.title;
+    tutInstructionEl.innerHTML = step.instruction;
+    buildTutNumberTiles(step.digits);
+    buildTutOperatorTiles();
+    renderTutTape();
+  }
+
+  function checkTutorialStep(){
+    const step = TUTORIAL_STEPS[tutStepIndex];
+    const numbersUsed = tutEquation.filter(t => t.type === 'number').length;
+    if (numbersUsed < step.digits.length){
+      tutStatusLine.textContent = 'Use all ' + step.digits.length + ' numbers first.';
+      tutStatusLine.className = 'status-line bad';
+      return;
+    }
+
+    const raw = tutEquation.map(t => t.value).join('');
+    const parts = raw.split('=');
+    if (parts.length !== 2){
+      tutStatusLine.textContent = 'Add exactly one "=" to check your equation.';
+      tutStatusLine.className = 'status-line bad';
+      return;
+    }
+
+    const left = evaluateSide(parts[0]);
+    const right = evaluateSide(parts[1]);
+    if (left === null || right === null || Math.abs(left - right) >= 1e-9){
+      tutResultBadge.textContent = '✕';
+      tutResultBadge.classList.remove('good');
+      tutResultBadge.classList.add('bad', 'show');
+      tutStatusLine.textContent = 'Not quite — check your math and try again.';
+      tutStatusLine.className = 'status-line bad';
+      return;
+    }
+
+    if (step.concept === 'concat' && !tutHasConcatenation()){
+      tutStatusLine.textContent = step.conceptHint;
+      tutStatusLine.className = 'status-line bad';
+      return;
+    }
+    if (step.concept === 'percent' && !tutEquation.some(t => t.value === '%')){
+      tutStatusLine.textContent = step.conceptHint;
+      tutStatusLine.className = 'status-line bad';
+      return;
+    }
+    if (step.concept === 'factorial' && !tutEquation.some(t => t.value === '!')){
+      tutStatusLine.textContent = step.conceptHint;
+      tutStatusLine.className = 'status-line bad';
+      return;
+    }
+
+    tutResultBadge.textContent = '✓';
+    tutResultBadge.classList.remove('bad');
+    tutResultBadge.classList.add('good', 'show');
+    tutStatusLine.textContent = 'Nice! ' + left.toLocaleString() + ' = ' + right.toLocaleString() + '.';
+    tutStatusLine.className = 'status-line good';
+    tutCheckBtn.disabled = true;
+
+    setTimeout(() => {
+      if (tutStepIndex + 1 < TUTORIAL_STEPS.length){
+        loadTutorialStep(tutStepIndex + 1);
+      } else {
+        finishTutorial();
+      }
+    }, 900);
+  }
+
+  function startTutorial(){
+    tutorialBackdrop.hidden = false;
+    loadTutorialStep(0);
+  }
+
+  function finishTutorial(){
+    safeSetLS(LS_TUTORIAL_KEY, '1');
+    tutorialBackdrop.hidden = true;
+    // First-timers go straight in — no extra "Start" click needed, they
+    // just proved they know how to play.
+    revealAndStart();
+  }
+
+  tutCheckBtn.addEventListener('click', checkTutorialStep);
+  tutBackspaceBtn.addEventListener('click', () => {
+    const last = tutEquation.pop();
+    if (!last) return;
+    if (last.type === 'number'){
+      const tile = tutNumberTilesEl.querySelector('[data-number-id="' + last.numberId + '"]');
+      if (tile) tile.classList.remove('used');
+    }
+    renderTutTape();
+  });
+  tutClearBtn.addEventListener('click', () => {
+    tutEquation = [];
+    tutNumberTilesEl.querySelectorAll('.tile').forEach(t => t.classList.remove('used'));
+    renderTutTape();
+  });
+  tutSkipBtn.addEventListener('click', finishTutorial);
+  // ------------------------------------------------------------------------
 
   backspaceBtn.addEventListener('click', backspace);
   clearBtn.addEventListener('click', clearAll);
@@ -907,6 +1145,18 @@
   if (solvedSignatures.size > 0){
     solutionsCounter.hidden = false;
     solutionsCountEl.textContent = solvedSignatures.size;
+  }
+
+  // ---- First load: either the guided tutorial (first-ever visit) or the
+  // start gate (every visit after that) — never straight into a running
+  // timer with no warning.
+  if (!safeGetLS(LS_TUTORIAL_KEY)){
+    playAreaEl.classList.add('gated');
+    startTutorial();
+  } else {
+    playAreaEl.classList.add('gated');
+    startGateDigitCount.textContent = NUMBERS.length;
+    startGateEl.hidden = false;
   }
 
 })();
