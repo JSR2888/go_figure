@@ -689,7 +689,22 @@ footer{
   font-family: 'JetBrains Mono', monospace;
   font-size: 13px;
   color: #5a4a30;
+  margin: 0 0 4px;
+}
+
+.win-rank{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--op-shadow);
   margin: 0 0 16px;
+  min-height: 1em;
+}
+.win-rank:empty{ margin-bottom: 0; min-height: 0; }
+
+#solutionsRankText{
+  color: var(--muted);
+  font-weight: 400;
 }
 
 .win-achievements{
