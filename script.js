@@ -254,6 +254,49 @@
   }
   // ----------------------------------------------------------------------
 
+  // ---- Backend logging (fastest-solve tracking) -------------------------
+  // Fire-and-forget calls to a Netlify Function backed by Supabase — see
+  // netlify/functions/log-solve.js and schema.sql. Failures are swallowed
+  // on purpose: if the backend is down, unreachable (e.g. testing locally
+  // without `netlify dev`), or the person is offline, gameplay must never
+  // be affected. This only ever sends a solve time and a solutions count —
+  // no personal data, and the id is a random token with no way to trace it
+  // back to a person.
+  const LS_CLIENT_ID_KEY = 'goFigure.clientId.v1';
+
+  function getOrCreateClientId(){
+    let id = safeGetLS(LS_CLIENT_ID_KEY);
+    if (id) return id;
+    id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : uuidV4Fallback();
+    safeSetLS(LS_CLIENT_ID_KEY, id);
+    return id;
+  }
+
+  function uuidV4Fallback(){
+    // Only used for browsers without crypto.randomUUID (pre-2022ish) —
+    // good enough for an anonymous, non-cryptographic identifier.
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  }
+
+  function logSolveToBackend(timeMs, solutionsCount){
+    const payload = {
+      puzzleDate: utcDateKey(new Date()),
+      clientId: getOrCreateClientId(),
+      timeMs: Math.max(1, Math.round(timeMs)),
+      solutionsCount,
+    };
+    fetch('/.netlify/functions/log-solve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(() => { /* see comment above — never let this affect gameplay */ });
+  }
+  // ----------------------------------------------------------------------
+
   // firstWinRecorded: true once the puzzle's been solved at least once —
   // either earlier this session, or (via localStorage) earlier today before
   // a reload. Gates stats/streak recording so exploring extra solutions
@@ -262,6 +305,12 @@
   let solvedSignatures = loadTodaysSolutions();
   let firstWinRecorded = solvedSignatures.size > 0;
   let boardLocked = false;
+  // Set once, at the first win, so later exploration-mode backend calls
+  // (which don't have a fresh elapsed time of their own) have something
+  // valid to send. Stays null across a reload, even if firstWinRecorded is
+  // already true from a previous session — that's fine, see
+  // celebrateExtraSolution()'s fallback.
+  let firstWinElapsedMs = null;
   // false until the tutorial finishes (first-timers) or the start gate is
   // clicked (returning players) — blocks all main-game interaction before
   // that, since the digits shouldn't be usable while they're hidden anyway.
@@ -613,8 +662,11 @@
 
     const elapsedMs = performance.now() - (startTime !== null ? startTime : performance.now());
     winTimeEl.textContent = formatElapsed(elapsedMs);
+    firstWinElapsedMs = elapsedMs;
 
     const { stats, newlyUnlocked, selfPercentile } = recordWin(elapsedMs);
+
+    logSolveToBackend(elapsedMs, solvedSignatures.size);
 
     const streakText = stats.currentStreak > 1
       ? '🔥 ' + stats.currentStreak + '-day streak'
@@ -665,6 +717,15 @@
   // for the "Explorer" achievement (which can only unlock here).
   function celebrateExtraSolution(){
     launchConfetti();
+
+    // firstWinElapsedMs is null if the win happened in an earlier session
+    // (e.g. reloaded mid-day) — fall back to the persisted best time so
+    // there's still a valid value to send; the backend ignores time_ms on
+    // updates anyway, this only matters for the (rare) case where the very
+    // first insert never made it to the server.
+    const timeForLog = firstWinElapsedMs !== null ? firstWinElapsedMs : (loadStats().bestTimeMs || 1);
+    logSolveToBackend(timeForLog, solvedSignatures.size);
+
     const stats = loadStats();
     const newlyUnlocked = checkAchievements(stats, { elapsedMs: null, solutionsCount: solvedSignatures.size });
     if (newlyUnlocked.length){
@@ -867,18 +928,18 @@
   });
 
   // ---- keyboard support ----
-  function tryTypeNumber(digit){
-    const btns = numberTilesEl.querySelectorAll('.tile:not(.used)');
+  function tryTypeNumberIn(containerEl, digit){
+    const btns = containerEl.querySelectorAll('.tile:not(.used)');
     for (const btn of btns){
       if (btn.textContent === digit){ btn.click(); return true; }
     }
     return false;
   }
 
-  function tryTypeOperator(key){
+  function tryTypeOperatorIn(containerEl, key){
     const op = OPERATORS.find(o => o.value === key);
     if (!op) return false;
-    const btns = operatorTilesEl.querySelectorAll('.tile');
+    const btns = containerEl.querySelectorAll('.tile');
     for (const btn of btns){
       if (btn.textContent === op.display){ btn.click(); return true; }
     }
@@ -897,9 +958,17 @@
       return;
     }
     if (!tutorialBackdrop.hidden){
-      // Tutorial tiles are tap-only by design (small, step-specific digit
-      // sets) — just make sure no keystroke leaks through to the hidden
-      // main puzzle underneath.
+      if (e.key === 'Backspace'){ e.preventDefault(); tutBackspaceBtn.click(); return; }
+      if (e.key === 'Enter'){
+        e.preventDefault();
+        if (!tutCheckBtn.disabled) tutCheckBtn.click();
+        return;
+      }
+      if (/^[0-9]$/.test(e.key)){
+        if (tryTypeNumberIn(tutNumberTilesEl, e.key)) e.preventDefault();
+        return;
+      }
+      if (tryTypeOperatorIn(tutOperatorTilesEl, e.key)) e.preventDefault();
       return;
     }
 
@@ -912,10 +981,10 @@
     if (e.key === 'Escape'){ closeHelp(); return; }
 
     if (/^[0-9]$/.test(e.key)){
-      if (tryTypeNumber(e.key)) e.preventDefault();
+      if (tryTypeNumberIn(numberTilesEl, e.key)) e.preventDefault();
       return;
     }
-    if (tryTypeOperator(e.key)) e.preventDefault();
+    if (tryTypeOperatorIn(operatorTilesEl, e.key)) e.preventDefault();
   });
 
   // ---- help popover (now purely on-demand — first-time onboarding is the
