@@ -49,10 +49,15 @@ alter table solves enable row level security;
 -- order by time_ms asc
 -- limit 20;
 
--- "You were faster than X% of today's solvers":
--- select
---   client_id,
---   time_ms,
---   percent_rank() over (partition by puzzle_date order by time_ms desc) as faster_than_pct
+-- Note: per-player rank/percentile ("you were 3rd fastest of 8" / "top 23%
+-- by speed") is computed live in netlify/functions/log-solve.js using two
+-- simple COUNT queries, and returned straight to the browser after every
+-- solve — no separate query needed here. This section is just for you to
+-- explore the data manually in the SQL editor if you want to.
+
+-- Top 20 by solutions found, for a given day:
+-- select client_id, solutions_count, time_ms
 -- from solves
--- where puzzle_date = '2026-07-09';
+-- where puzzle_date = '2026-07-09'
+-- order by solutions_count desc
+-- limit 20;
