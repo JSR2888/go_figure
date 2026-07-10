@@ -1,0 +1,9 @@
+# Tells Netlify where to find serverless functions and how to build them.
+# No build step for the site itself — index.html/style.css/script.js are
+# served as-is — this config exists purely for the /functions directory.
+
+[build]
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"

@@ -1,0 +1,8 @@
+{
+  "name": "go-figure",
+  "private": true,
+  "description": "Go Figure — daily number puzzle game. This package.json exists only to declare the dependency the Netlify Function needs; the game itself has no build step.",
+  "dependencies": {
+    "@supabase/supabase-js": "^2"
+  }
+}
