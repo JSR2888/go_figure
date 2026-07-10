@@ -497,6 +497,124 @@ footer{
   to{ opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
+/* ===== Start gate (returning players) ===== */
+.rig{
+  position: relative;
+}
+
+.play-area{
+  transition: filter 0.2s ease, opacity 0.2s ease;
+}
+.play-area.gated{
+  filter: blur(6px);
+  opacity: 0.5;
+  pointer-events: none;
+  user-select: none;
+}
+
+.start-gate{
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+.start-gate[hidden]{ display: none; }
+
+.start-gate-inner{
+  background: var(--tape-bg);
+  border: 1px solid var(--felt-line);
+  border-radius: 14px;
+  padding: 32px 28px;
+  text-align: center;
+  max-width: 320px;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.45);
+}
+.start-gate-emoji{ font-size: 38px; margin-bottom: 8px; }
+.start-gate-inner h2{
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 22px;
+  margin: 0 0 10px;
+}
+.start-gate-inner p{
+  font-size: 13.5px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 0 0 20px;
+}
+.start-gate-inner p strong{ color: var(--paper); }
+.start-gate-inner .btn{ width: 100%; }
+
+/* ===== Guided tutorial ===== */
+.tutorial-backdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 20, 15, 0.85);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  padding: 20px;
+  animation: fadeIn 0.2s ease-out;
+}
+.tutorial-backdrop[hidden]{ display: none; }
+
+.tutorial-card{
+  background: var(--bg-deep);
+  border: 1px solid var(--felt-line);
+  border-radius: 16px;
+  padding: 26px 26px 22px;
+  max-width: 460px;
+  width: 100%;
+  max-height: 88vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.55);
+  animation: winPop 0.3s cubic-bezier(.34,1.56,.64,1);
+}
+
+.tutorial-header{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.tutorial-step-label{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--op-bg);
+}
+.tutorial-skip{
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.tutorial-skip:hover{ color: var(--paper); }
+
+.tutorial-card h2{
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 22px;
+  margin: 0 0 8px;
+  color: var(--paper);
+}
+
+.tutorial-instruction{
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 0 0 18px;
+}
+
+.tutorial-card .tape-wrap{ margin-bottom: 20px; }
+.tutorial-card .rack{ margin-bottom: 16px; }
+
 /* ===== Victory overlay ===== */
 .win-backdrop{
   position: fixed;
