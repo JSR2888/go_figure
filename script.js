@@ -136,6 +136,7 @@
   const winCloseX = document.getElementById('winCloseX');
   const winTimeEl = document.getElementById('winTime');
   const winStreakEl = document.getElementById('winStreak');
+  const winRankEl = document.getElementById('winRank');
   const winAchievementsEl = document.getElementById('winAchievements');
   const shareBtn = document.getElementById('shareBtn');
   const shareBtnLabel = document.getElementById('shareBtnLabel');
@@ -144,6 +145,7 @@
   const timerPill = document.getElementById('timerPill');
   const solutionsCounter = document.getElementById('solutionsCounter');
   const solutionsCountEl = document.getElementById('solutionsCount');
+  const solutionsRankTextEl = document.getElementById('solutionsRankText');
   const toastEl = document.getElementById('toast');
   const achvBackdrop = document.getElementById('achvBackdrop');
   const achvCloseBtn = document.getElementById('achvCloseBtn');
@@ -282,6 +284,12 @@
     });
   }
 
+  // Returns a Promise resolving to the parsed response ({ ok, ranksAvailable,
+  // totalPlayers, speedRank, solutionsRank }) on success, or null on any
+  // failure — network error, backend not deployed yet, offline, etc. Callers
+  // must treat null as "no rank data available" and degrade gracefully
+  // rather than showing an error, since this is a nice-to-have, not core
+  // gameplay.
   function logSolveToBackend(timeMs, solutionsCount){
     const payload = {
       puzzleDate: utcDateKey(new Date()),
@@ -289,11 +297,41 @@
       timeMs: Math.max(1, Math.round(timeMs)),
       solutionsCount,
     };
-    fetch('/.netlify/functions/log-solve', {
+    return fetch('/.netlify/functions/log-solve', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    }).catch(() => { /* see comment above — never let this affect gameplay */ });
+    })
+      .then(res => (res.ok ? res.json() : null))
+      .catch(() => null);
+  }
+
+  // "1st", "2nd", "3rd", "4th", ... "11th", "21st", etc.
+  function ordinal(n){
+    const suffixes = ['th', 'st', 'nd', 'rd'];
+    const remainder = n % 100;
+    return n + (suffixes[(remainder - 20) % 10] || suffixes[remainder] || suffixes[0]);
+  }
+
+  // Three tiers, from most to least specific:
+  //  - genuinely first to ever solve it today (totalPlayers === 1) → say so
+  //  - top 10 by speed → exact ordinal ("3rd fastest of 8")
+  //  - everyone else → percentile ("top 23% by speed")
+  // Note: rank #1 among MANY players (i.e. currently fastest, but not the
+  // literal first person to solve it today) intentionally falls into the
+  // "top 10" tier rather than the "first" tier — claiming to be "first"
+  // would be misleading if other, slower solves already happened earlier
+  // in the day.
+  function buildSpeedRankMessage(speedRank, totalPlayers){
+    if (!speedRank || !totalPlayers || totalPlayers < 1) return '';
+    if (totalPlayers === 1){
+      return "You're the first one to complete this puzzle today!";
+    }
+    if (speedRank <= 10){
+      return 'You were ' + ordinal(speedRank) + ' fastest of the ' + totalPlayers + ' people who have played today!';
+    }
+    const topPercent = Math.min(100, Math.max(1, Math.ceil((speedRank / totalPlayers) * 100)));
+    return 'You were in the top ' + topPercent + '% by speed!';
   }
   // ----------------------------------------------------------------------
 
@@ -666,7 +704,12 @@
 
     const { stats, newlyUnlocked, selfPercentile } = recordWin(elapsedMs);
 
-    logSolveToBackend(elapsedMs, solvedSignatures.size);
+    winRankEl.textContent = ''; // filled in asynchronously below, once the backend responds
+    logSolveToBackend(elapsedMs, solvedSignatures.size).then(result => {
+      if (result && result.ok && result.ranksAvailable){
+        winRankEl.textContent = buildSpeedRankMessage(result.speedRank, result.totalPlayers);
+      }
+    });
 
     const streakText = stats.currentStreak > 1
       ? '🔥 ' + stats.currentStreak + '-day streak'
@@ -724,7 +767,11 @@
     // updates anyway, this only matters for the (rare) case where the very
     // first insert never made it to the server.
     const timeForLog = firstWinElapsedMs !== null ? firstWinElapsedMs : (loadStats().bestTimeMs || 1);
-    logSolveToBackend(timeForLog, solvedSignatures.size);
+    logSolveToBackend(timeForLog, solvedSignatures.size).then(result => {
+      if (result && result.ok && result.ranksAvailable){
+        solutionsRankTextEl.textContent = ' (Rank: ' + result.solutionsRank + '/' + result.totalPlayers + ')';
+      }
+    });
 
     const stats = loadStats();
     const newlyUnlocked = checkAchievements(stats, { elapsedMs: null, solutionsCount: solvedSignatures.size });
@@ -1027,7 +1074,7 @@
       conceptHint: 'Correct math, but try using the % operator this time.',
     },
     {
-      digits: [3, 6],
+      digits: [3, 4, 6],
       title: 'Factorials',
       instruction: '<strong>!</strong> means factorial — multiply the number by every whole number below it. Try <strong>3! = 6</strong> (that\u2019s 3 × 2 × 1).',
       concept: 'factorial',
