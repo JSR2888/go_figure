@@ -192,6 +192,10 @@
 
   // equation is an ordered list of tokens: { type: 'number'|'operator', display, value, numberId? }
   let equation = [];
+  // Where the next tile insertion happens (0 = very start, equation.length =
+  // very end). Tapping a token in the tape, or the arrow keys, move this
+  // without touching the equation itself — only Backspace/tile-taps do.
+  let cursorIndex = 0;
 
   // ---- Persistent, no-login storage (localStorage) --------------------
   // Everything here lives only in this browser on this device. No account,
@@ -544,7 +548,8 @@
   function useNumber(idx, num, btnEl){
     if (boardLocked || !puzzleStarted) return;
     startTimerIfNeeded();
-    equation.push({ type: 'number', display: String(num), value: String(num), numberId: idx });
+    equation.splice(cursorIndex, 0, { type: 'number', display: String(num), value: String(num), numberId: idx });
+    cursorIndex++;
     btnEl.classList.add('used');
     pressAnim(btnEl);
     render();
@@ -553,7 +558,8 @@
   function useOperator(op, btnEl){
     if (boardLocked || !puzzleStarted) return;
     startTimerIfNeeded();
-    equation.push({ type: 'operator', display: op.display, value: op.value });
+    equation.splice(cursorIndex, 0, { type: 'operator', display: op.display, value: op.value });
+    cursorIndex++;
     pressAnim(btnEl);
     render();
   }
@@ -569,10 +575,11 @@
 
   function backspace(){
     if (boardLocked || !puzzleStarted) return;
-    const last = equation.pop();
-    if (!last) return;
-    if (last.type === 'number'){
-      const tile = numberTilesEl.querySelector('[data-number-id="' + last.numberId + '"]');
+    if (cursorIndex === 0) return; // nothing sits before the cursor
+    const [removed] = equation.splice(cursorIndex - 1, 1);
+    cursorIndex--;
+    if (removed.type === 'number'){
+      const tile = numberTilesEl.querySelector('[data-number-id="' + removed.numberId + '"]');
       if (tile) tile.classList.remove('used');
     }
     render();
@@ -581,28 +588,38 @@
   function clearAll(){
     if (boardLocked || !puzzleStarted) return;
     equation = [];
+    cursorIndex = 0;
     numberTilesEl.querySelectorAll('.tile').forEach(t => t.classList.remove('used'));
     render();
   }
 
   function render(){
+    const cursorEl = tapeEl.querySelector('.cursor');
     tapeEl.querySelectorAll('.tape-token').forEach(el => el.remove());
-    if (equation.length === 0){
-      tapePlaceholder.style.display = 'inline';
-    } else {
-      tapePlaceholder.style.display = 'none';
-      equation.forEach((tok, i) => {
-        const span = document.createElement('span');
-        span.className = 'tape-token' + (tok.type === 'operator' ? ' op' : '');
-        span.textContent = tok.display;
-        // numbers played back to back sit tight against each other to read as one concatenated number
-        const prev = equation[i - 1];
-        if (tok.type === 'number' && prev && prev.type === 'number'){
-          span.style.marginLeft = '0px';
-        }
-        tapeEl.insertBefore(span, tapeEl.querySelector('.cursor'));
+
+    tapePlaceholder.style.display = equation.length === 0 ? 'inline' : 'none';
+
+    equation.forEach((tok, i) => {
+      if (i === cursorIndex) tapeEl.appendChild(cursorEl);
+      const span = document.createElement('span');
+      span.className = 'tape-token' + (tok.type === 'operator' ? ' op' : '');
+      span.textContent = tok.display;
+      const prev = equation[i - 1];
+      if (tok.type === 'number' && prev && prev.type === 'number'){
+        span.style.marginLeft = '0px';
+      }
+      // Tap a token to move the cursor right after it — lets you fix a
+      // typo in the middle of an equation without deleting everything
+      // that came after it.
+      span.addEventListener('click', () => {
+        if (boardLocked || !puzzleStarted) return;
+        cursorIndex = i + 1;
+        render();
       });
-    }
+      tapeEl.appendChild(span);
+    });
+    if (cursorIndex === equation.length) tapeEl.appendChild(cursorEl);
+    tapeEl.appendChild(tapePlaceholder);
 
     // reset result feedback whenever the equation changes
     resultBadge.classList.remove('show', 'good', 'bad');
@@ -788,6 +805,7 @@
     stopConfetti();
     boardLocked = false;
     equation = [];
+    cursorIndex = 0;
     numberTilesEl.querySelectorAll('.tile').forEach(t => t.classList.remove('used'));
     render();
   }
@@ -1057,6 +1075,16 @@
         if (!tutCheckBtn.disabled) tutCheckBtn.click();
         return;
       }
+      if (e.key === 'ArrowLeft'){
+        e.preventDefault();
+        if (tutCursorIndex > 0){ tutCursorIndex--; renderTutTape(); }
+        return;
+      }
+      if (e.key === 'ArrowRight'){
+        e.preventDefault();
+        if (tutCursorIndex < tutEquation.length){ tutCursorIndex++; renderTutTape(); }
+        return;
+      }
       if (/^[0-9]$/.test(e.key)){
         if (tryTypeNumberIn(tutNumberTilesEl, e.key)) e.preventDefault();
         return;
@@ -1072,6 +1100,18 @@
       return;
     }
     if (e.key === 'Escape'){ closeHelp(); return; }
+    if (e.key === 'ArrowLeft'){
+      if (!puzzleStarted || boardLocked) return;
+      e.preventDefault();
+      if (cursorIndex > 0){ cursorIndex--; render(); }
+      return;
+    }
+    if (e.key === 'ArrowRight'){
+      if (!puzzleStarted || boardLocked) return;
+      e.preventDefault();
+      if (cursorIndex < equation.length){ cursorIndex++; render(); }
+      return;
+    }
 
     if (/^[0-9]$/.test(e.key)){
       if (tryTypeNumberIn(numberTilesEl, e.key)) e.preventDefault();
@@ -1130,6 +1170,7 @@
 
   let tutStepIndex = 0;
   let tutEquation = [];
+  let tutCursorIndex = 0;
 
   function buildTutNumberTiles(digits){
     tutNumberTilesEl.innerHTML = '';
@@ -1140,7 +1181,8 @@
       btn.dataset.numberId = idx;
       btn.setAttribute('aria-label', 'Number ' + num);
       btn.addEventListener('click', () => {
-        tutEquation.push({ type: 'number', display: String(num), value: String(num), numberId: idx });
+        tutEquation.splice(tutCursorIndex, 0, { type: 'number', display: String(num), value: String(num), numberId: idx });
+        tutCursorIndex++;
         btn.classList.add('used');
         pressAnim(btn);
         renderTutTape();
@@ -1157,7 +1199,8 @@
       btn.textContent = op.display;
       btn.setAttribute('aria-label', 'Operator ' + op.display);
       btn.addEventListener('click', () => {
-        tutEquation.push({ type: 'operator', display: op.display, value: op.value });
+        tutEquation.splice(tutCursorIndex, 0, { type: 'operator', display: op.display, value: op.value });
+        tutCursorIndex++;
         pressAnim(btn);
         renderTutTape();
       });
@@ -1166,22 +1209,29 @@
   }
 
   function renderTutTape(){
+    const cursorEl = tutTapeEl.querySelector('.cursor');
     tutTapeEl.querySelectorAll('.tape-token').forEach(el => el.remove());
-    if (tutEquation.length === 0){
-      tutPlaceholderEl.style.display = 'inline';
-    } else {
-      tutPlaceholderEl.style.display = 'none';
-      tutEquation.forEach((tok, i) => {
-        const span = document.createElement('span');
-        span.className = 'tape-token' + (tok.type === 'operator' ? ' op' : '');
-        span.textContent = tok.display;
-        const prev = tutEquation[i - 1];
-        if (tok.type === 'number' && prev && prev.type === 'number'){
-          span.style.marginLeft = '0px';
-        }
-        tutTapeEl.insertBefore(span, tutTapeEl.querySelector('.cursor'));
+
+    tutPlaceholderEl.style.display = tutEquation.length === 0 ? 'inline' : 'none';
+
+    tutEquation.forEach((tok, i) => {
+      if (i === tutCursorIndex) tutTapeEl.appendChild(cursorEl);
+      const span = document.createElement('span');
+      span.className = 'tape-token' + (tok.type === 'operator' ? ' op' : '');
+      span.textContent = tok.display;
+      const prev = tutEquation[i - 1];
+      if (tok.type === 'number' && prev && prev.type === 'number'){
+        span.style.marginLeft = '0px';
+      }
+      span.addEventListener('click', () => {
+        tutCursorIndex = i + 1;
+        renderTutTape();
       });
-    }
+      tutTapeEl.appendChild(span);
+    });
+    if (tutCursorIndex === tutEquation.length) tutTapeEl.appendChild(cursorEl);
+    tutTapeEl.appendChild(tutPlaceholderEl);
+
     tutResultBadge.classList.remove('show', 'good', 'bad');
     tutStatusLine.textContent = '';
     tutStatusLine.className = 'status-line';
@@ -1196,6 +1246,7 @@
   function loadTutorialStep(i){
     tutStepIndex = i;
     tutEquation = [];
+    tutCursorIndex = 0;
     const step = TUTORIAL_STEPS[i];
     tutStepLabel.textContent = 'Step ' + (i + 1) + ' of ' + TUTORIAL_STEPS.length;
     tutTitleEl.textContent = step.title;
@@ -1282,16 +1333,18 @@
 
   tutCheckBtn.addEventListener('click', checkTutorialStep);
   tutBackspaceBtn.addEventListener('click', () => {
-    const last = tutEquation.pop();
-    if (!last) return;
-    if (last.type === 'number'){
-      const tile = tutNumberTilesEl.querySelector('[data-number-id="' + last.numberId + '"]');
+    if (tutCursorIndex === 0) return;
+    const [removed] = tutEquation.splice(tutCursorIndex - 1, 1);
+    tutCursorIndex--;
+    if (removed.type === 'number'){
+      const tile = tutNumberTilesEl.querySelector('[data-number-id="' + removed.numberId + '"]');
       if (tile) tile.classList.remove('used');
     }
     renderTutTape();
   });
   tutClearBtn.addEventListener('click', () => {
     tutEquation = [];
+    tutCursorIndex = 0;
     tutNumberTilesEl.querySelectorAll('.tile').forEach(t => t.classList.remove('used'));
     renderTutTape();
   });
