@@ -305,8 +305,23 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
-      .then(res => (res.ok ? res.json() : null))
-      .catch(() => null);
+      .then(res => {
+        if (!res.ok){
+          res.text().then(msg => console.warn('Go Figure: log-solve returned ' + res.status + ' — ' + msg));
+          return null;
+        }
+        return res.json();
+      })
+      .then(result => {
+        if (result && result.ok && !result.ranksAvailable){
+          console.warn('Go Figure: solve saved, but rank computation failed — check Netlify function logs.');
+        }
+        return result;
+      })
+      .catch(err => {
+        console.warn('Go Figure: log-solve request failed (offline, or the function isn\u2019t deployed yet)', err);
+        return null;
+      });
   }
 
   // "1st", "2nd", "3rd", "4th", ... "11th", "21st", etc.
