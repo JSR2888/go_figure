@@ -19,6 +19,12 @@
 
 *{ box-sizing: border-box; }
 
+/* Rapid double-tapping a button (e.g. mashing Backspace) was being
+   interpreted as a double-tap-to-zoom gesture on mobile browsers.
+   `manipulation` disables that specifically on interactive elements
+   while leaving normal pinch-zoom/panning intact everywhere else. */
+button{ touch-action: manipulation; }
+
 html, body{
   margin:0;
   padding:0;
@@ -133,7 +139,11 @@ h1{
   padding: 4px 2px;
   line-height:1;
   animation: dropIn 0.18s ease-out;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.1s ease;
 }
+.tape-token:hover{ background: rgba(244,235,217,0.1); }
 
 .tape-token.op{ color: var(--op-bg); margin: 0 4px; }
 
