@@ -36,6 +36,20 @@
     return y + '-' + m + '-' + d;
   }
 
+  // "Puzzle #N" for sharing — N counts days since the earliest date in
+  // PUZZLE_BANK (the game's launch day), so it climbs by exactly 1 each
+  // real calendar day regardless of which puzzle actually ended up being
+  // shown (e.g. if a date's entry was ever missing and an older puzzle got
+  // reused as a fallback).
+  function getPuzzleNumber(){
+    const launchKey = Object.keys(PUZZLE_BANK).sort()[0];
+    if (!launchKey) return 1;
+    const launchDate = new Date(launchKey + 'T00:00:00Z');
+    const todayDate = new Date(utcDateKey(new Date()) + 'T00:00:00Z');
+    const daysSinceLaunch = Math.round((todayDate - launchDate) / 86400000);
+    return Math.max(1, daysSinceLaunch + 1);
+  }
+
   // ---- Optional authoring helper -------------------------------------
   // Not used automatically — this is here so you can sanity-check a
   // candidate puzzle from the browser console before adding it to
@@ -820,10 +834,13 @@
 
   // ---- Share ----
   function buildShareText(){
-    const lines = ['Go Figure — ' + utcDateKey(new Date())];
-    lines.push('✅ Solved in ' + winTimeEl.textContent);
-    if (winStreakEl.textContent) lines.push(winStreakEl.textContent.replace(' · ', ' — '));
-    lines.push('🧩 ' + solvedSignatures.size + ' solution' + (solvedSignatures.size === 1 ? '' : 's') + ' found');
+    const stats = loadStats();
+    const lines = ['Go Figure: Puzzle #' + getPuzzleNumber()];
+    lines.push('solved in ' + winTimeEl.textContent);
+    if (stats.currentStreak > 0){
+      const dayWord = stats.currentStreak === 1 ? 'day' : 'days'; // no "1 days" on day one
+      lines.push('streak: ' + stats.currentStreak + ' ' + dayWord + ' 🔥');
+    }
     lines.push(location.origin + location.pathname);
     return lines.join('\n');
   }
