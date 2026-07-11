@@ -27,7 +27,7 @@ exports.handler = async () => {
     statusCode: 200,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      SUPABASE_URL: redact(process.env.SUPABASE_URL),
+      SUPABASE_DATABASE_URL: redact(process.env.SUPABASE_DATABASE_URL),
       SUPABASE_SERVICE_ROLE_KEY: redact(process.env.SUPABASE_SERVICE_ROLE_KEY),
       nodeVersion: process.version,
     }, null, 2),
