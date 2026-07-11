@@ -45,7 +45,7 @@ Nothing in the game *requires* this to work — if it's not set up yet,
 2. Open **SQL Editor → New query**, paste in the contents of `schema.sql` from this repo, and run it. That creates the `solves` table.
 3. Go to **Project Settings → API** and copy two values: the **Project URL** and the **`service_role` secret key** (not the `anon` key — that one's meant to be public, this one isn't).
 4. In Netlify: **Site configuration → Environment variables**, add:
-   - `SUPABASE_URL` = the Project URL from step 3
+   - `SUPABASE_DATABASE_URL` = the Project URL from step 3 (deliberately **not** named `SUPABASE_URL` — if you ever connect the Supabase-Netlify extension, it auto-injects its own `SUPABASE_URL` with a `/rest/v1/` suffix that conflicts with what `@supabase/supabase-js` expects, and silently breaks everything. A different name sidesteps that collision entirely.)
    - `SUPABASE_SERVICE_ROLE_KEY` = the service_role key from step 3
 5. Push this repo (including `netlify/functions/log-solve.js`, `netlify.toml`, and `package.json`) to GitHub as usual — Netlify picks up the function automatically and installs `@supabase/supabase-js` from `package.json` during deploy.
 
