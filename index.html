@@ -65,6 +65,16 @@
         <button class="btn btn-submit" id="startGateBtn">▶ Start puzzle</button>
       </div>
     </div>
+
+    <!-- Shown instead of the above if this browser already solved today's puzzle -->
+    <div class="start-gate" id="alreadySolvedGate" hidden>
+      <div class="start-gate-inner">
+        <div class="start-gate-emoji">✅</div>
+        <h2>You've already solved today's puzzle!</h2>
+        <p id="alreadySolvedSummary">Would you like to keep finding solutions?</p>
+        <button class="btn btn-submit" id="alreadySolvedBtn">🔁 Keep playing</button>
+      </div>
+    </div>
   </div>
   <footer>
     Thanks for playing!
