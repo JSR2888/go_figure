@@ -8,13 +8,18 @@
 // this function does (via env vars).
 //
 // Env vars needed (set in Netlify: Site configuration → Environment variables):
-//   SUPABASE_URL              — from Supabase: Project Settings → API
+//   SUPABASE_DATABASE_URL     — from Supabase: Project Settings → API → "Project URL"
+//                               (named SUPABASE_DATABASE_URL rather than the more obvious
+//                               SUPABASE_URL because the Supabase-Netlify extension auto-injects
+//                               its OWN "SUPABASE_URL" that includes a /rest/v1/ suffix — wrong
+//                               shape for @supabase/supabase-js's createClient(), which appends
+//                               that path itself. Using a different name avoids the collision.)
 //   SUPABASE_SERVICE_ROLE_KEY — same page — KEEP SECRET, never ship to the client
 
 const { createClient } = require('@supabase/supabase-js');
 
 const supabase = createClient(
-  process.env.SUPABASE_URL,
+  process.env.SUPABASE_DATABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
