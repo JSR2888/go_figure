@@ -836,10 +836,10 @@
   function buildShareText(){
     const stats = loadStats();
     const lines = ['Go Figure: Puzzle #' + getPuzzleNumber()];
-    lines.push('solved in ' + winTimeEl.textContent);
+    lines.push('Solved in ' + winTimeEl.textContent);
     if (stats.currentStreak > 0){
       const dayWord = stats.currentStreak === 1 ? 'day' : 'days'; // no "1 days" on day one
-      lines.push('streak: ' + stats.currentStreak + ' ' + dayWord + ' 🔥');
+      lines.push('Streak: ' + stats.currentStreak + ' ' + dayWord + ' 🔥');
     }
     lines.push(location.origin + location.pathname);
     return lines.join('\n');
