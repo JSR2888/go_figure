@@ -1103,7 +1103,7 @@
       conceptHint: 'Correct math, but try using the % operator this time.',
     },
     {
-      digits: [3, 4, 6],
+      digits: [3, 6],
       title: 'Factorials',
       instruction: '<strong>!</strong> means factorial — multiply the number by every whole number below it. Try <strong>3! = 6</strong> (that\u2019s 3 × 2 × 1).',
       concept: 'factorial',
