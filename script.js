@@ -157,6 +157,9 @@
   const startGateEl = document.getElementById('startGate');
   const startGateBtn = document.getElementById('startGateBtn');
   const startGateDigitCount = document.getElementById('startGateDigitCount');
+  const alreadySolvedGateEl = document.getElementById('alreadySolvedGate');
+  const alreadySolvedBtn = document.getElementById('alreadySolvedBtn');
+  const alreadySolvedSummaryEl = document.getElementById('alreadySolvedSummary');
 
   const tutorialBackdrop = document.getElementById('tutorialBackdrop');
   const tutStepLabel = document.getElementById('tutStepLabel');
@@ -461,17 +464,28 @@
 
   // ---- Start gate (returning players) ----
   // Digits stay hidden behind a blur until this runs, so the timer only
-  // ever starts when the player is actually ready — either by clicking
-  // "Start puzzle" here, or automatically the moment a first-time player
-  // finishes the guided tutorial (see finishTutorial()).
-  function revealAndStart(){
+  // ever starts when the player is actually ready to be timed. There are
+  // three ways in:
+  //  - finishTutorial() → first-ever visit, always timed
+  //  - startGateBtn     → returning player, hasn't solved today yet, timed
+  //  - alreadySolvedBtn → returning player, ALREADY solved today — no
+  //    timer, since the timed attempt already happened earlier
+  function revealAndStart(shouldStartTimer){
     startGateEl.hidden = true;
+    alreadySolvedGateEl.hidden = true;
     playAreaEl.classList.remove('gated');
     puzzleStarted = true;
-    startTimerIfNeeded();
+    if (shouldStartTimer){
+      startTimerIfNeeded();
+    } else {
+      // Nothing to time — hide the pill rather than let it sit at a static
+      // "0:00" that looks like a stalled timer.
+      timerPill.style.display = 'none';
+    }
   }
 
-  startGateBtn.addEventListener('click', revealAndStart);
+  startGateBtn.addEventListener('click', () => revealAndStart(true));
+  alreadySolvedBtn.addEventListener('click', () => revealAndStart(false));
 
   function buildNumberTiles(){
     numberTilesEl.innerHTML = '';
@@ -1228,8 +1242,10 @@
     safeSetLS(LS_TUTORIAL_KEY, '1');
     tutorialBackdrop.hidden = true;
     // First-timers go straight in — no extra "Start" click needed, they
-    // just proved they know how to play.
-    revealAndStart();
+    // just proved they know how to play. Always timed: finishing the
+    // tutorial for the first time can only happen before today's puzzle
+    // has been solved in this browser.
+    revealAndStart(true);
   }
 
   tutCheckBtn.addEventListener('click', checkTutorialStep);
@@ -1263,12 +1279,21 @@
     solutionsCountEl.textContent = solvedSignatures.size;
   }
 
-  // ---- First load: either the guided tutorial (first-ever visit) or the
-  // start gate (every visit after that) — never straight into a running
-  // timer with no warning.
+  // ---- First load: one of three states —
+  //  1. First-ever visit → guided tutorial
+  //  2. Already solved today (persisted from earlier) → "already solved" gate, no timer
+  //  3. Returning player, haven't solved today yet → normal start gate, timed
+  // Never straight into a running timer with no warning, and never a
+  // re-running timer for a puzzle already solved today.
   if (!safeGetLS(LS_TUTORIAL_KEY)){
     playAreaEl.classList.add('gated');
     startTutorial();
+  } else if (firstWinRecorded){
+    playAreaEl.classList.add('gated');
+    alreadySolvedSummaryEl.textContent = solvedSignatures.size === 1
+      ? "You've found 1 solution so far. Want to keep exploring?"
+      : 'You\u2019ve found ' + solvedSignatures.size + ' solutions so far. Want to keep exploring?';
+    alreadySolvedGateEl.hidden = false;
   } else {
     playAreaEl.classList.add('gated');
     startGateDigitCount.textContent = NUMBERS.length;
