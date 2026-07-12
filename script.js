@@ -594,13 +594,11 @@
   }
 
   function render(){
-    const cursorEl = tapeEl.querySelector('.cursor');
     tapeEl.querySelectorAll('.tape-token').forEach(el => el.remove());
 
     tapePlaceholder.style.display = equation.length === 0 ? 'inline' : 'none';
 
     equation.forEach((tok, i) => {
-      if (i === cursorIndex) tapeEl.appendChild(cursorEl);
       const span = document.createElement('span');
       span.className = 'tape-token' + (tok.type === 'operator' ? ' op' : '');
       span.textContent = tok.display;
@@ -608,18 +606,10 @@
       if (tok.type === 'number' && prev && prev.type === 'number'){
         span.style.marginLeft = '0px';
       }
-      // Tap a token to move the cursor right after it — lets you fix a
-      // typo in the middle of an equation without deleting everything
-      // that came after it.
-      span.addEventListener('click', () => {
-        if (boardLocked || !puzzleStarted) return;
-        cursorIndex = i + 1;
-        render();
-      });
       tapeEl.appendChild(span);
     });
-    if (cursorIndex === equation.length) tapeEl.appendChild(cursorEl);
-    tapeEl.appendChild(tapePlaceholder);
+
+    positionCursor(tapeEl, tapeEl.querySelector('.cursor'), tapePlaceholder, cursorIndex);
 
     // reset result feedback whenever the equation changes
     resultBadge.classList.remove('show', 'good', 'bad');
@@ -629,6 +619,95 @@
     const equalsCount = equation.filter(t => t.value === '=').length;
     submitBtn.disabled = equation.length === 0 || equalsCount !== 1;
   }
+
+  // Positions a cursor element by pixel coordinates rather than as a real
+  // sibling in the flex flow — this is what stops it from ever pushing
+  // tokens around or breaking tight number concatenation, no matter where
+  // it sits. Reusable for both the main tape and the tutorial's mini tape.
+  function positionCursor(tapeElement, cursorElement, placeholderEl, index){
+    const tapeRect = tapeElement.getBoundingClientRect();
+    const tokenEls = Array.from(tapeElement.querySelectorAll('.tape-token'));
+    let left, top, height;
+
+    if (tokenEls.length === 0){
+      const r = placeholderEl.getBoundingClientRect();
+      left = r.left - tapeRect.left;
+      top = r.top - tapeRect.top;
+      height = r.height;
+    } else if (index <= 0){
+      const r = tokenEls[0].getBoundingClientRect();
+      left = r.left - tapeRect.left;
+      top = r.top - tapeRect.top;
+      height = r.height;
+    } else if (index >= tokenEls.length){
+      const r = tokenEls[tokenEls.length - 1].getBoundingClientRect();
+      left = r.right - tapeRect.left;
+      top = r.top - tapeRect.top;
+      height = r.height;
+    } else {
+      const rPrev = tokenEls[index - 1].getBoundingClientRect();
+      const rNext = tokenEls[index].getBoundingClientRect();
+      // If the equation wrapped to a new line right at this gap, snap to
+      // the start of that line instead of averaging across two rows.
+      if (Math.abs(rNext.top - rPrev.top) > 4){
+        left = rNext.left - tapeRect.left;
+        top = rNext.top - tapeRect.top;
+        height = rNext.height;
+      } else {
+        left = rPrev.right - tapeRect.left;
+        top = rPrev.top - tapeRect.top;
+        height = rPrev.height;
+      }
+    }
+
+    cursorElement.style.left = left + 'px';
+    cursorElement.style.top = top + 'px';
+    cursorElement.style.height = height + 'px';
+
+    // Force it solid-visible for a beat so a move can never land mid-"off"
+    // in the blink cycle and look like nothing happened.
+    cursorElement.classList.add('just-moved');
+    clearTimeout(cursorElement._justMovedTimeout);
+    cursorElement._justMovedTimeout = setTimeout(() => {
+      cursorElement.classList.remove('just-moved');
+    }, 180);
+  }
+
+  // Click anywhere in the tape (not just directly on a token) to move the
+  // cursor to the nearest gap — the same way clicking a real text field
+  // positions the caret near your click, not only on top of a character.
+  function tapeClickToCursor(tapeElement, tokensGetter, onSetIndex){
+    return function(e){
+      const tokenEls = tokensGetter();
+      if (tokenEls.length === 0){ onSetIndex(0); return; }
+      const clickX = e.clientX;
+      let bestIndex = tokenEls.length;
+      let bestDist = Infinity;
+      for (let i = 0; i <= tokenEls.length; i++){
+        let gapX;
+        if (i === 0){
+          gapX = tokenEls[0].getBoundingClientRect().left;
+        } else if (i === tokenEls.length){
+          gapX = tokenEls[tokenEls.length - 1].getBoundingClientRect().right;
+        } else {
+          gapX = (tokenEls[i - 1].getBoundingClientRect().right + tokenEls[i].getBoundingClientRect().left) / 2;
+        }
+        const dist = Math.abs(gapX - clickX);
+        if (dist < bestDist){ bestDist = dist; bestIndex = i; }
+      }
+      onSetIndex(bestIndex);
+    };
+  }
+
+  tapeEl.addEventListener('click', tapeClickToCursor(
+    tapeEl,
+    () => Array.from(tapeEl.querySelectorAll('.tape-token')),
+    (i) => {
+      if (boardLocked || !puzzleStarted) return;
+      cursorIndex = i;
+      render();
+    }
+  ));
 
   // Turns "3!" into "fact(3)" and "(2+2)!" into "fact((2+2))" so a plain JS eval can handle it.
   function applyFactorials(str){
@@ -1209,13 +1288,11 @@
   }
 
   function renderTutTape(){
-    const cursorEl = tutTapeEl.querySelector('.cursor');
     tutTapeEl.querySelectorAll('.tape-token').forEach(el => el.remove());
 
     tutPlaceholderEl.style.display = tutEquation.length === 0 ? 'inline' : 'none';
 
     tutEquation.forEach((tok, i) => {
-      if (i === tutCursorIndex) tutTapeEl.appendChild(cursorEl);
       const span = document.createElement('span');
       span.className = 'tape-token' + (tok.type === 'operator' ? ' op' : '');
       span.textContent = tok.display;
@@ -1223,14 +1300,10 @@
       if (tok.type === 'number' && prev && prev.type === 'number'){
         span.style.marginLeft = '0px';
       }
-      span.addEventListener('click', () => {
-        tutCursorIndex = i + 1;
-        renderTutTape();
-      });
       tutTapeEl.appendChild(span);
     });
-    if (tutCursorIndex === tutEquation.length) tutTapeEl.appendChild(cursorEl);
-    tutTapeEl.appendChild(tutPlaceholderEl);
+
+    positionCursor(tutTapeEl, tutTapeEl.querySelector('.cursor'), tutPlaceholderEl, tutCursorIndex);
 
     tutResultBadge.classList.remove('show', 'good', 'bad');
     tutStatusLine.textContent = '';
@@ -1238,6 +1311,12 @@
     const equalsCount = tutEquation.filter(t => t.value === '=').length;
     tutCheckBtn.disabled = tutEquation.length === 0 || equalsCount !== 1;
   }
+
+  tutTapeEl.addEventListener('click', tapeClickToCursor(
+    tutTapeEl,
+    () => Array.from(tutTapeEl.querySelectorAll('.tape-token')),
+    (i) => { tutCursorIndex = i; renderTutTape(); }
+  ));
 
   function tutHasConcatenation(){
     return tutEquation.some((t, i) => t.type === 'number' && i > 0 && tutEquation[i - 1].type === 'number');
