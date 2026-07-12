@@ -157,6 +157,8 @@
   const keepPlayingBtn = document.getElementById('keepPlayingBtn');
   const confettiCanvas = document.getElementById('confettiCanvas');
   const timerPill = document.getElementById('timerPill');
+  const timerControlsEl = document.getElementById('timerControls');
+  const timerToggleBtn = document.getElementById('timerToggleBtn');
   const solutionsCounter = document.getElementById('solutionsCounter');
   const solutionsCountEl = document.getElementById('solutionsCount');
   const solutionsRankTextEl = document.getElementById('solutionsRankText');
@@ -477,6 +479,15 @@
   let startTime = null;
   let timerInterval = null;
 
+  // Whether the ticking numbers are visible. Defaults to HIDDEN — playtesting
+  // showed a visible countdown-style timer can itself be stressful — but the
+  // clock keeps running underneath regardless, so hiding it never affects
+  // scoring. Persists across visits once someone picks a preference; only
+  // ever relevant before the first solve, since the whole control disappears
+  // afterward (see triggerWin() and revealAndStart()).
+  const LS_TIMER_HIDDEN_KEY = 'goFigure.timerHidden.v1';
+  let timerHidden = safeGetLS(LS_TIMER_HIDDEN_KEY) !== '0'; // absent/'1' → hidden, only '0' means "show"
+
   function startTimerIfNeeded(){
     if (startTime !== null) return;
     startTime = performance.now();
@@ -485,8 +496,28 @@
 
   function updateTimerDisplay(){
     if (startTime === null) return;
-    timerPill.textContent = '⏱ ' + formatElapsed(performance.now() - startTime);
+    timerPill.textContent = timerHidden ? '⏱ Hidden' : '⏱ ' + formatElapsed(performance.now() - startTime);
   }
+
+  function applyTimerHiddenState(){
+    timerToggleBtn.textContent = timerHidden ? '🙈' : '👁';
+    const label = timerHidden ? 'Show timer' : 'Hide timer';
+    timerToggleBtn.setAttribute('aria-label', label);
+    timerToggleBtn.title = label;
+    if (startTime !== null){
+      updateTimerDisplay();
+    } else {
+      timerPill.textContent = timerHidden ? '⏱ Hidden' : '⏱ 0:00';
+    }
+  }
+
+  timerToggleBtn.addEventListener('click', () => {
+    timerHidden = !timerHidden;
+    safeSetLS(LS_TIMER_HIDDEN_KEY, timerHidden ? '1' : '0');
+    applyTimerHiddenState();
+  });
+
+  applyTimerHiddenState();
 
   function formatElapsed(ms){
     const totalSeconds = Math.floor(ms / 1000);
@@ -511,9 +542,9 @@
     if (shouldStartTimer){
       startTimerIfNeeded();
     } else {
-      // Nothing to time — hide the pill rather than let it sit at a static
-      // "0:00" that looks like a stalled timer.
-      timerPill.style.display = 'none';
+      // Nothing to time — hide the whole control (pill + toggle) rather
+      // than let it sit showing a stalled "0:00".
+      timerControlsEl.style.display = 'none';
     }
   }
 
@@ -664,13 +695,27 @@
     cursorElement.style.top = top + 'px';
     cursorElement.style.height = height + 'px';
 
-    // Force it solid-visible for a beat so a move can never land mid-"off"
-    // in the blink cycle and look like nothing happened.
-    cursorElement.classList.add('just-moved');
-    clearTimeout(cursorElement._justMovedTimeout);
-    cursorElement._justMovedTimeout = setTimeout(() => {
-      cursorElement.classList.remove('just-moved');
-    }, 180);
+    scheduleCursorBlink(cursorElement);
+  }
+
+  // Plain JS opacity toggling instead of a CSS animation — a CSS animation
+  // has to be fully restarted (removed/re-added) to reset the blink phase
+  // after a move, and restarting a step-timed animation causes a visible
+  // flicker. This gives the same "solid after a move, blinks once idle"
+  // feel with no restart artifact. State lives on the element itself so
+  // the main tape and the tutorial's tape blink independently.
+  function scheduleCursorBlink(cursorElement){
+    clearTimeout(cursorElement._blinkPauseTimeout);
+    clearInterval(cursorElement._blinkInterval);
+    cursorElement.style.opacity = '1';
+
+    cursorElement._blinkPauseTimeout = setTimeout(() => {
+      let visible = true;
+      cursorElement._blinkInterval = setInterval(() => {
+        visible = !visible;
+        cursorElement.style.opacity = visible ? '1' : '0';
+      }, 550);
+    }, 500);
   }
 
   // Click anywhere in the tape (not just directly on a token) to move the
@@ -836,6 +881,7 @@
   function triggerWin(){
     boardLocked = true;
     if (timerInterval !== null){ clearInterval(timerInterval); timerInterval = null; }
+    timerControlsEl.style.display = 'none'; // both the timer and its toggle disappear after the first solve
 
     const elapsedMs = performance.now() - (startTime !== null ? startTime : performance.now());
     winTimeEl.textContent = formatElapsed(elapsedMs);
@@ -1454,6 +1500,7 @@
     startTutorial();
   } else if (firstWinRecorded){
     playAreaEl.classList.add('gated');
+    timerControlsEl.style.display = 'none';
     alreadySolvedSummaryEl.textContent = solvedSignatures.size === 1
       ? "You've found 1 solution so far. Want to keep exploring?"
       : 'You\u2019ve found ' + solvedSignatures.size + ' solutions so far. Want to keep exploring?';
