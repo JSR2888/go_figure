@@ -154,16 +154,16 @@ h1{
 
 /* Positioned by JS (left/top/height) after every render — never part of
    the flex flow, so moving it can never push tokens around or change
-   spacing. See positionCursor() in script.js. Blinking is also handled in
-   JS (plain opacity toggling) rather than a CSS animation — restarting a
-   step-timed CSS animation on every move caused a visible flicker. */
+   spacing. See positionCursor() in script.js. */
 .cursor{
   position: absolute;
   width: 2px;
   background: var(--paper);
   pointer-events: none;
-  opacity: 1;
+  animation: blink 1.1s step-start infinite;
 }
+
+@keyframes blink{ 50%{ opacity: 0; } }
 
 @keyframes dropIn{
   from{ transform: translateY(-6px); opacity:0; }
@@ -323,7 +323,8 @@ footer{
 .timer-controls{
   position: absolute;
   top: -14px;
-  left: 16px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 1;
   display: flex;
   align-items: center;
@@ -331,8 +332,8 @@ footer{
 }
 
 .timer-pill{
-  background: var(--op-bg);
-  color: var(--op-ink);
+  background: #ffd400;
+  color: var(--tile-ink);
   font-family: 'JetBrains Mono', monospace;
   font-weight: 700;
   font-size: 13px;
@@ -346,8 +347,8 @@ footer{
   height: 26px;
   border-radius: 50%;
   border: none;
-  background: var(--tape-bg);
-  color: var(--paper);
+  background: #ffd400;
+  color: var(--tile-ink);
   font-size: 13px;
   line-height: 1;
   cursor: pointer;
