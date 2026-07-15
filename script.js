@@ -495,8 +495,8 @@
   }
 
   function updateTimerDisplay(){
-    if (startTime === null) return;
-    timerPill.textContent = timerHidden ? '⏱ Hidden' : '⏱ ' + formatElapsed(performance.now() - startTime);
+    if (startTime === null || timerHidden) return;
+    timerPill.textContent = '⏱ ' + formatElapsed(performance.now() - startTime);
   }
 
   function applyTimerHiddenState(){
@@ -504,10 +504,13 @@
     const label = timerHidden ? 'Show timer' : 'Hide timer';
     timerToggleBtn.setAttribute('aria-label', label);
     timerToggleBtn.title = label;
-    if (startTime !== null){
-      updateTimerDisplay();
-    } else {
-      timerPill.textContent = timerHidden ? '⏱ Hidden' : '⏱ 0:00';
+    // Hidden means genuinely gone from view, not just covered by different
+    // text — the toggle button stays visible so it can always be switched
+    // back on.
+    timerPill.style.display = timerHidden ? 'none' : '';
+    if (!timerHidden){
+      if (startTime !== null) updateTimerDisplay();
+      else timerPill.textContent = '⏱ 0:00';
     }
   }
 
@@ -661,10 +664,23 @@
     let left, top, height;
 
     if (tokenEls.length === 0){
-      const r = placeholderEl.getBoundingClientRect();
-      left = r.left - tapeRect.left;
-      top = r.top - tapeRect.top;
-      height = r.height;
+      // The placeholder text renders much smaller than a real token (15px
+      // vs 26px), so sizing the cursor off the placeholder's own box made
+      // it render short and mis-centered. A hidden probe token gives the
+      // exact height/vertical position a real character will have, while
+      // `left` still comes from the placeholder so the cursor sits right
+      // where typing will actually begin.
+      const probe = document.createElement('span');
+      probe.className = 'tape-token';
+      probe.style.visibility = 'hidden';
+      probe.textContent = '0';
+      tapeElement.insertBefore(probe, placeholderEl);
+      const probeRect = probe.getBoundingClientRect();
+      const placeholderRect = placeholderEl.getBoundingClientRect();
+      left = placeholderRect.left - tapeRect.left;
+      top = probeRect.top - tapeRect.top;
+      height = probeRect.height;
+      tapeElement.removeChild(probe);
     } else if (index <= 0){
       const r = tokenEls[0].getBoundingClientRect();
       left = r.left - tapeRect.left;
@@ -694,28 +710,6 @@
     cursorElement.style.left = left + 'px';
     cursorElement.style.top = top + 'px';
     cursorElement.style.height = height + 'px';
-
-    scheduleCursorBlink(cursorElement);
-  }
-
-  // Plain JS opacity toggling instead of a CSS animation — a CSS animation
-  // has to be fully restarted (removed/re-added) to reset the blink phase
-  // after a move, and restarting a step-timed animation causes a visible
-  // flicker. This gives the same "solid after a move, blinks once idle"
-  // feel with no restart artifact. State lives on the element itself so
-  // the main tape and the tutorial's tape blink independently.
-  function scheduleCursorBlink(cursorElement){
-    clearTimeout(cursorElement._blinkPauseTimeout);
-    clearInterval(cursorElement._blinkInterval);
-    cursorElement.style.opacity = '1';
-
-    cursorElement._blinkPauseTimeout = setTimeout(() => {
-      let visible = true;
-      cursorElement._blinkInterval = setInterval(() => {
-        visible = !visible;
-        cursorElement.style.opacity = visible ? '1' : '0';
-      }, 550);
-    }, 500);
   }
 
   // Click anywhere in the tape (not just directly on a token) to move the
