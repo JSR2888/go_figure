@@ -3,7 +3,43 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Go Figure — Math Game</title>
+
+<title>Go Figure — A Daily Number Puzzle Game</title>
+<meta name="description" content="Go Figure is a free daily number game: build a true equation using every digit you're given, then check it. A quick brain-teasing math puzzle — new digits every day.">
+
+<!-- If you're on a custom domain now instead of *.netlify.app, update this
+     and every other URL below (og:url, twitter:image, JSON-LD, sitemap.xml,
+     robots.txt) to match. -->
+<link rel="canonical" href="https://gofiguremath.netlify.app/">
+
+<!-- Open Graph: controls how this looks when shared on Facebook, iMessage, LinkedIn, Discord, etc. -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Go Figure — A Daily Number Puzzle Game">
+<meta property="og:description" content="Build a true equation using every digit you're given. A new number puzzle every day.">
+<meta property="og:url" content="https://gofiguremath.netlify.app/">
+<!-- TODO: add og:image once you have a 1200x630px share preview image
+     (e.g. og-image.png in this same folder), then uncomment:
+<meta property="og:image" content="https://gofiguremath.netlify.app/og-image.png">
+-->
+
+<!-- Twitter/X card -->
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Go Figure — A Daily Number Puzzle Game">
+<meta name="twitter:description" content="Build a true equation using every digit you're given. A new number puzzle every day.">
+
+<!-- Structured data: helps Google understand this is a game, not just a random page -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Game",
+  "name": "Go Figure",
+  "description": "A free daily number puzzle game. Build a true equation using every digit you're given.",
+  "genre": "Puzzle",
+  "url": "https://gofiguremath.netlify.app/",
+  "isAccessibleForFree": true
+}
+</script>
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -34,7 +70,7 @@
       <div class="tape-wrap">
         <div class="timer-controls" id="timerControls">
           <div class="timer-pill" id="timerPill">⏱ 0:00</div>
-          <button class="timer-toggle-btn" id="timerToggleBtn" aria-label="Show timer" title="Show timer">Show Timer</button>
+          <button class="timer-toggle-btn" id="timerToggleBtn" aria-label="Show timer" title="Show timer">🙈</button>
         </div>
         <div class="tape" id="tape">
           <span class="cursor"></span>
