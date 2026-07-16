@@ -29,8 +29,13 @@ html, body{
   margin:0;
   padding:0;
   min-height:100vh;
-  background:
-    radial-gradient(ellipse at top, #17422f 0%, var(--bg) 45%, var(--bg-deep) 100%);
+  /* Solid fallback color, set separately from the gradient below: mobile
+     browsers (notably iOS Safari) paint the elastic overscroll/bounce area
+     using this plain background-color, not the gradient image — leaving it
+     at its default transparent (which the `background:` shorthand alone
+     would do) is what was showing white past the page edges. */
+  background-color: var(--bg-deep);
+  background-image: radial-gradient(ellipse at top, #17422f 0%, var(--bg) 45%, var(--bg-deep) 100%);
   font-family: 'Inter', system-ui, sans-serif;
   color: var(--paper);
 }
