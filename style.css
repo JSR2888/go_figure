@@ -323,8 +323,7 @@ footer{
 .timer-controls{
   position: absolute;
   top: -14px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 16px;
   z-index: 1;
   display: flex;
   align-items: center;
@@ -343,15 +342,17 @@ footer{
 }
 
 .timer-toggle-btn{
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
+  border-radius: 999px;
   border: none;
   background: #ffd400;
   color: var(--tile-ink);
-  font-size: 13px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 6px 12px;
   line-height: 1;
   cursor: pointer;
+  white-space: nowrap;
   display: flex;
   align-items: center;
   justify-content: center;
