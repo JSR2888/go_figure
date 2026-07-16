@@ -667,20 +667,25 @@
       // The placeholder text renders much smaller than a real token (15px
       // vs 26px), so sizing the cursor off the placeholder's own box made
       // it render short and mis-centered. A hidden probe token gives the
-      // exact height/vertical position a real character will have, while
-      // `left` still comes from the placeholder so the cursor sits right
-      // where typing will actually begin.
+      // exact height/vertical position a real character will have.
+      //
+      // Order matters here: `visibility: hidden` still reserves layout
+      // space, so the probe would push the placeholder rightward if we
+      // measured the placeholder AFTER inserting it — capture the
+      // placeholder's true, undisturbed position first.
+      const placeholderRect = placeholderEl.getBoundingClientRect();
+      left = placeholderRect.left - tapeRect.left;
+
       const probe = document.createElement('span');
       probe.className = 'tape-token';
       probe.style.visibility = 'hidden';
       probe.textContent = '0';
       tapeElement.insertBefore(probe, placeholderEl);
       const probeRect = probe.getBoundingClientRect();
-      const placeholderRect = placeholderEl.getBoundingClientRect();
-      left = placeholderRect.left - tapeRect.left;
+      tapeElement.removeChild(probe);
+
       top = probeRect.top - tapeRect.top;
       height = probeRect.height;
-      tapeElement.removeChild(probe);
     } else if (index <= 0){
       const r = tokenEls[0].getBoundingClientRect();
       left = r.left - tapeRect.left;
@@ -1438,6 +1443,12 @@
   function startTutorial(){
     tutorialBackdrop.hidden = false;
     loadTutorialStep(0);
+    // The modal's entrance animation scales up from 0.6x over 0.3s — if
+    // the cursor's pixel measurements happen to land mid-animation, the
+    // active transform throws off the numbers (renders small/misplaced).
+    // A cheap corrective re-render once the animation has definitely
+    // finished guarantees a final, accurate position regardless of timing.
+    setTimeout(() => { renderTutTape(); }, 350);
   }
 
   function finishTutorial(){
