@@ -500,7 +500,7 @@
   }
 
   function applyTimerHiddenState(){
-    timerToggleBtn.textContent = timerHidden ? '🙈' : '👁';
+    timerToggleBtn.textContent = timerHidden ? 'Show Timer' : 'Hide Timer';
     const label = timerHidden ? 'Show timer' : 'Hide timer';
     timerToggleBtn.setAttribute('aria-label', label);
     timerToggleBtn.title = label;
