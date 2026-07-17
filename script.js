@@ -2,9 +2,11 @@
 
   /* =========================================================
      CONFIG
-     PUZZLE_BANK is loaded from puzzles.js (see index.html) —
-     that's the file you'll edit daily. OPERATORS lives here
-     since it rarely changes.
+     PUZZLE_BANK (from puzzles.js) is now a FALLBACK, not the primary
+     source — the game checks Supabase first (see SUPABASE_PUZZLES_URL
+     below) so you can add puzzles from the Supabase dashboard with no
+     redeploy. puzzles.js only gets used if Supabase is unreachable or a
+     date's missing there.
 
      OPERATORS: `display` is what shows on the tile / in the
      equation, `value` is what's actually evaluated AND what
@@ -12,20 +14,58 @@
      a symbol here, type that exact character to use it).
      ========================================================= */
 
+  // Fill these in from Supabase: Project Settings → API.
+  // The "anon public" key is DESIGNED to be public and safe to ship in
+  // client-side code like this — it's not the secret service-role key
+  // used by netlify/functions/log-solve.js. It can only ever do what the
+  // Row Level Security policies in schema.sql allow, which for `puzzles`
+  // is read-only (see the "Public read access to puzzles" policy).
+  const SUPABASE_URL = 'YOUR_SUPABASE_URL_HERE';           // e.g. 'https://zsbqxxxxxxxxxxxxxxxx.supabase.co'
+  const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY_HERE'; // the "anon public" key, NOT the service_role key
+
+  // Fetches today's digits from the `puzzles` table. Returns null (rather
+  // than throwing) on any failure — missing config, network error, no row
+  // for this date — so the caller can fall back to puzzles.js cleanly.
+  async function fetchPuzzleFromSupabase(dateKey){
+    if (!SUPABASE_URL || SUPABASE_URL === 'YOUR_SUPABASE_URL_HERE') return null;
+    try {
+      const url = SUPABASE_URL + '/rest/v1/puzzles?puzzle_date=eq.' + dateKey + '&select=digits';
+      const res = await fetch(url, {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+        },
+      });
+      if (!res.ok) return null;
+      const rows = await res.json();
+      if (!Array.isArray(rows) || rows.length === 0) return null;
+      const digits = rows[0].digits;
+      if (!Array.isArray(digits) || digits.length === 0) return null;
+      return digits;
+    } catch (e){
+      console.warn('Go Figure: could not reach Supabase for today\u2019s puzzle, falling back to puzzles.js', e);
+      return null;
+    }
+  }
+
   // Falls back to the most recent date on or before today that actually
   // has an entry, so the game never breaks if you forget to add "today".
-  function getDailyDigits(){
+  async function getDailyDigits(){
     const todayKey = utcDateKey(new Date());
+
+    const fromSupabase = await fetchPuzzleFromSupabase(todayKey);
+    if (fromSupabase) return fromSupabase;
+
     if (PUZZLE_BANK[todayKey]) return PUZZLE_BANK[todayKey];
 
     const availableKeys = Object.keys(PUZZLE_BANK).sort();
     const pastKeys = availableKeys.filter(k => k <= todayKey);
     if (pastKeys.length){
-      console.warn('Go Figure: no puzzle set for ' + todayKey + ' — reusing ' + pastKeys[pastKeys.length - 1] + '.');
+      console.warn('Go Figure: no puzzle for ' + todayKey + ' in Supabase or puzzles.js — reusing ' + pastKeys[pastKeys.length - 1] + '.');
       return PUZZLE_BANK[pastKeys[pastKeys.length - 1]];
     }
 
-    console.warn('Go Figure: PUZZLE_BANK is empty — using a placeholder puzzle.');
+    console.warn('Go Figure: no puzzle source available — using a placeholder puzzle.');
     return [1, 2, 3, 4];
   }
 
@@ -118,7 +158,13 @@
   };
   // ----------------------------------------------------------------------
 
-  const NUMBERS = getDailyDigits();
+  // Populated asynchronously by init() at the bottom of this file, once
+  // getDailyDigits() resolves (Supabase first, puzzles.js as fallback).
+  // Everything that reads NUMBERS — buildNumberTiles(), submit()'s
+  // "use all N numbers" check, etc. — only ever runs after a user
+  // interaction, which can't happen until init() has finished anyway
+  // (the board stays gated/blurred until then).
+  let NUMBERS = [];
 
   const OPERATORS = [
     { display: '+', value: '+' },
@@ -170,6 +216,7 @@
   const achievementsBtn = document.getElementById('achievementsBtn');
 
   const playAreaEl = document.getElementById('playArea');
+  playAreaEl.classList.add('gated'); // lifted only once init() below finishes loading a puzzle
   const startGateEl = document.getElementById('startGate');
   const startGateBtn = document.getElementById('startGateBtn');
   const startGateDigitCount = document.getElementById('startGateDigitCount');
@@ -1485,35 +1532,40 @@
   clearBtn.addEventListener('click', clearAll);
   submitBtn.addEventListener('click', submit);
 
-  buildNumberTiles();
-  buildOperatorTiles();
-  render();
+  async function init(){
+    NUMBERS = await getDailyDigits();
 
-  if (solvedSignatures.size > 0){
-    solutionsCounter.hidden = false;
-    solutionsCountEl.textContent = solvedSignatures.size;
+    buildNumberTiles();
+    buildOperatorTiles();
+    render();
+
+    if (solvedSignatures.size > 0){
+      solutionsCounter.hidden = false;
+      solutionsCountEl.textContent = solvedSignatures.size;
+    }
+
+    // One of three states —
+    //  1. First-ever visit → guided tutorial
+    //  2. Already solved today (persisted from earlier) → "already solved" gate, no timer
+    //  3. Returning player, haven't solved today yet → normal start gate, timed
+    // Never straight into a running timer with no warning, and never a
+    // re-running timer for a puzzle already solved today. playArea is
+    // already gated (set synchronously above, before this fetch even
+    // started) — these branches just decide which specific gate to show.
+    if (!safeGetLS(LS_TUTORIAL_KEY)){
+      startTutorial();
+    } else if (firstWinRecorded){
+      timerControlsEl.style.display = 'none';
+      alreadySolvedSummaryEl.textContent = solvedSignatures.size === 1
+        ? "You've found 1 solution so far. Want to keep exploring?"
+        : 'You\u2019ve found ' + solvedSignatures.size + ' solutions so far. Want to keep exploring?';
+      alreadySolvedGateEl.hidden = false;
+    } else {
+      startGateDigitCount.textContent = NUMBERS.length;
+      startGateEl.hidden = false;
+    }
   }
 
-  // ---- First load: one of three states —
-  //  1. First-ever visit → guided tutorial
-  //  2. Already solved today (persisted from earlier) → "already solved" gate, no timer
-  //  3. Returning player, haven't solved today yet → normal start gate, timed
-  // Never straight into a running timer with no warning, and never a
-  // re-running timer for a puzzle already solved today.
-  if (!safeGetLS(LS_TUTORIAL_KEY)){
-    playAreaEl.classList.add('gated');
-    startTutorial();
-  } else if (firstWinRecorded){
-    playAreaEl.classList.add('gated');
-    timerControlsEl.style.display = 'none';
-    alreadySolvedSummaryEl.textContent = solvedSignatures.size === 1
-      ? "You've found 1 solution so far. Want to keep exploring?"
-      : 'You\u2019ve found ' + solvedSignatures.size + ' solutions so far. Want to keep exploring?';
-    alreadySolvedGateEl.hidden = false;
-  } else {
-    playAreaEl.classList.add('gated');
-    startGateDigitCount.textContent = NUMBERS.length;
-    startGateEl.hidden = false;
-  }
+  init();
 
 })();
