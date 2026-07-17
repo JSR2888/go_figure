@@ -14,26 +14,39 @@
      a symbol here, type that exact character to use it).
      ========================================================= */
 
-  // Fill these in from Supabase: Project Settings → API.
-  // The "anon public" key is DESIGNED to be public and safe to ship in
-  // client-side code like this — it's not the secret service-role key
-  // used by netlify/functions/log-solve.js. It can only ever do what the
-  // Row Level Security policies in schema.sql allow, which for `puzzles`
-  // is read-only (see the "Public read access to puzzles" policy).
-  const SUPABASE_URL = 'YOUR_SUPABASE_URL_HERE';           // e.g. 'https://zsbqxxxxxxxxxxxxxxxx.supabase.co'
-  const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY_HERE'; // the "anon public" key, NOT the service_role key
+  // Nothing hardcoded here — the Supabase project URL and anon key both
+  // come from Netlify's own env vars (auto-injected by the Supabase
+  // Netlify extension), served up by netlify/functions/puzzle-config.js.
+  // One source of truth: if a key ever rotates, update it in Netlify and
+  // nothing in this file needs to change. Cached after the first fetch
+  // since it's the same for the whole session.
+  let cachedSupabaseConfig = null;
+  async function getSupabaseConfig(){
+    if (cachedSupabaseConfig) return cachedSupabaseConfig;
+    try {
+      const res = await fetch('/.netlify/functions/puzzle-config');
+      if (!res.ok) return null;
+      const config = await res.json();
+      if (!config.supabaseUrl || !config.supabaseAnonKey) return null;
+      cachedSupabaseConfig = config;
+      return config;
+    } catch (e){
+      return null;
+    }
+  }
 
   // Fetches today's digits from the `puzzles` table. Returns null (rather
   // than throwing) on any failure — missing config, network error, no row
   // for this date — so the caller can fall back to puzzles.js cleanly.
   async function fetchPuzzleFromSupabase(dateKey){
-    if (!SUPABASE_URL || SUPABASE_URL === 'YOUR_SUPABASE_URL_HERE') return null;
+    const config = await getSupabaseConfig();
+    if (!config) return null;
     try {
-      const url = SUPABASE_URL + '/rest/v1/puzzles?puzzle_date=eq.' + dateKey + '&select=digits';
+      const url = config.supabaseUrl + '/rest/v1/puzzles?puzzle_date=eq.' + dateKey + '&select=digits';
       const res = await fetch(url, {
         headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+          apikey: config.supabaseAnonKey,
+          Authorization: 'Bearer ' + config.supabaseAnonKey,
         },
       });
       if (!res.ok) return null;
