@@ -10,9 +10,10 @@ you're given, then check it.
 - `script.js` — game logic (tiles, keyboard input, equation checking, tutorial, backend logging)
 - `puzzles.js` — **fallback puzzle source** — used only if Supabase is unreachable or missing a date (see below)
 - `netlify/functions/log-solve.js` — serverless function that logs solve times/counts to Supabase
+- `netlify/functions/puzzle-config.js` — hands the browser the two *public* Supabase values (project URL + anon key) so nothing's hardcoded in `script.js`
 - `schema.sql` — the Supabase database schema (run once, in Supabase's SQL editor)
 - `netlify.toml` — tells Netlify where the functions live
-- `package.json` — declares the one dependency the function needs (`@supabase/supabase-js`)
+- `package.json` — declares the one dependency the functions need (`@supabase/supabase-js`)
 
 ## Adding a new day's puzzle (no redeploy needed)
 
@@ -37,13 +38,21 @@ insert into puzzles (puzzle_date, digits) values
 on conflict (puzzle_date) do update set digits = excluded.digits;
 ```
 
-**One-time setup**: `script.js` needs your Supabase project's URL and
-*anon* key (Project Settings → API — the "anon public" one, not the secret
-service-role key) filled in near the top of the file, where it currently
-says `SUPABASE_URL` / `SUPABASE_ANON_KEY` = `'YOUR_..._HERE'`. The anon key
-is designed to be public and safe to ship in client-side code — it can
-only ever do what the Row Level Security policies in `schema.sql` allow,
-which for `puzzles` is read-only.
+**One-time setup**: nothing to edit in `script.js` — it fetches its config
+from `netlify/functions/puzzle-config.js`, which reads two env vars the
+Supabase Netlify extension already auto-injects:
+
+- `SUPABASE_DATABASE_URL` — same one `log-solve.js` uses (the bare project
+  URL, deliberately not named `SUPABASE_URL` to dodge the extension's own
+  differently-shaped `/rest/v1/`-suffixed variable of that name)
+- `SUPABASE_ANON_KEY` — the public anon key, safe to hand to the browser;
+  it can only ever do what the Row Level Security policies in `schema.sql`
+  allow, which for `puzzles` is read-only
+
+If both are already set in Netlify (Site configuration → Environment
+variables) — which they should be, courtesy of the extension — this just
+works after you push `puzzle-config.js`. `SUPABASE_SERVICE_ROLE_KEY` and
+`SUPABASE_JWT_SECRET` stay server-only and are never touched by this file.
 
 ### puzzles.js — the fallback, not the primary source anymore
 
