@@ -8,28 +8,60 @@ you're given, then check it.
 - `index.html` — page structure
 - `style.css` — all visual styling
 - `script.js` — game logic (tiles, keyboard input, equation checking, tutorial, backend logging)
-- `puzzles.js` — **the file you'll edit daily** — today's digits live here
+- `puzzles.js` — **fallback puzzle source** — used only if Supabase is unreachable or missing a date (see below)
 - `netlify/functions/log-solve.js` — serverless function that logs solve times/counts to Supabase
 - `schema.sql` — the Supabase database schema (run once, in Supabase's SQL editor)
 - `netlify.toml` — tells Netlify where the functions live
 - `package.json` — declares the one dependency the function needs (`@supabase/supabase-js`)
 
-## Adding a new day's puzzle
+## Adding a new day's puzzle (no redeploy needed)
 
-Open `puzzles.js` and add a line to `PUZZLE_BANK`, keyed by date in
-`YYYY-MM-DD` (UTC):
+Puzzles now live primarily in Supabase, not in a file you have to edit and
+push. Open Supabase → **Table Editor → puzzles → Insert row**:
+
+| puzzle_date | digits |
+|---|---|
+| `2026-07-15` | `[2, 3, 5, 8]` |
+
+That's it — live on the site within seconds. Any number of digits works,
+duplicates are fine, and dates are UTC (`YYYY-MM-DD`) so the puzzle changes
+at the same moment for everyone regardless of time zone.
+
+**Adding a batch of future puzzles at once** — use the SQL Editor instead:
+
+```sql
+insert into puzzles (puzzle_date, digits) values
+  ('2026-07-16', '[1, 4, 5, 9]'),
+  ('2026-07-17', '[2, 2, 3, 7]'),
+  ('2026-07-18', '[1, 3, 4, 6]')
+on conflict (puzzle_date) do update set digits = excluded.digits;
+```
+
+**One-time setup**: `script.js` needs your Supabase project's URL and
+*anon* key (Project Settings → API — the "anon public" one, not the secret
+service-role key) filled in near the top of the file, where it currently
+says `SUPABASE_URL` / `SUPABASE_ANON_KEY` = `'YOUR_..._HERE'`. The anon key
+is designed to be public and safe to ship in client-side code — it can
+only ever do what the Row Level Security policies in `schema.sql` allow,
+which for `puzzles` is read-only.
+
+### puzzles.js — the fallback, not the primary source anymore
+
+If Supabase is briefly unreachable, or you simply haven't added today's
+puzzle yet, the game falls back to whatever's in `PUZZLE_BANK` inside
+`puzzles.js`:
 
 ```js
 const PUZZLE_BANK = {
   '2026-07-08': [1, 2, 3, 4],
   '2026-07-09': [2, 3, 5, 8],
-  '2026-07-11': [3, 4, 4, 7],   // <- new entry
 };
 ```
 
-Any number of digits is fine, and duplicates are allowed. Puzzles change
-over at UTC midnight, so it's the same puzzle for everyone regardless of
-time zone.
+You don't need to keep this in perfect sync day-to-day — it's a safety
+net, not the thing you edit for every puzzle. Worth periodically copying
+recent Supabase entries back into it though, so the game still has a
+reasonable fallback if Supabase ever has a real outage.
 
 ## Backend setup (solve-time tracking)
 
