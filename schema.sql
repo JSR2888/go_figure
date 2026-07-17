@@ -61,3 +61,46 @@ alter table solves enable row level security;
 -- where puzzle_date = '2026-07-09'
 -- order by solutions_count desc
 -- limit 20;
+
+
+-- =========================================================================
+-- Daily puzzles — add new rows here (via the Table Editor, no code, no
+-- redeploy) to publish tomorrow's puzzle, or a whole batch of future ones
+-- at once. The game checks this table first every time it loads, and only
+-- falls back to the puzzles.js file shipped with the site if this table
+-- has no row for today (Supabase briefly unreachable, or you just haven't
+-- added today's yet). puzzles.js is now a resilience backup, not the
+-- primary place you manage puzzles day-to-day.
+-- =========================================================================
+
+create table if not exists puzzles (
+  puzzle_date date primary key,   -- UTC date key, e.g. '2026-07-09'
+  digits jsonb not null,          -- e.g. [1, 2, 3, 4] — any length, duplicates fine
+  created_at timestamptz not null default now()
+);
+
+alter table puzzles enable row level security;
+
+-- Unlike `solves`, puzzle digits aren't sensitive — every player needs to
+-- see them to play — so this table gets a public READ policy. Writing
+-- still requires the Supabase dashboard (Table Editor) or the service-role
+-- key; the public anon key used by the browser can only ever SELECT here.
+create policy "Public read access to puzzles"
+  on puzzles for select
+  using (true);
+
+-- ---------------------------------------------------------------------
+-- Adding a puzzle: Table Editor → puzzles → Insert row
+--   puzzle_date: 2026-07-15
+--   digits:      [2, 3, 5, 8]
+-- That's it — live on the site within seconds, no deploy needed.
+--
+-- Adding many at once: click "Insert" → "Insert rows via SQL" (or just
+-- use the SQL Editor directly) and run something like:
+--
+-- insert into puzzles (puzzle_date, digits) values
+--   ('2026-07-16', '[1, 4, 5, 9]'),
+--   ('2026-07-17', '[2, 2, 3, 7]'),
+--   ('2026-07-18', '[1, 3, 4, 6]')
+-- on conflict (puzzle_date) do update set digits = excluded.digits;
+-- ---------------------------------------------------------------------
