@@ -89,6 +89,13 @@ create policy "Public read access to puzzles"
   on puzzles for select
   using (true);
 
+-- IMPORTANT: the RLS policy above only takes effect once the underlying
+-- Postgres role actually has base privileges on the table — RLS is
+-- checked AFTER that, never instead of it. Without this grant, the anon
+-- key gets a flat "permission denied for table puzzles" (Postgres error
+-- 42501), not a policy-related error, even though the policy exists.
+grant select on table public.puzzles to anon;
+
 -- ---------------------------------------------------------------------
 -- Adding a puzzle: Table Editor → puzzles → Insert row
 --   puzzle_date: 2026-07-15
