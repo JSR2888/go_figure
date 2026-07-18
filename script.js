@@ -25,12 +25,20 @@
     if (cachedSupabaseConfig) return cachedSupabaseConfig;
     try {
       const res = await fetch('/.netlify/functions/puzzle-config');
-      if (!res.ok) return null;
+      if (!res.ok){
+        const body = await res.text();
+        console.warn('Go Figure: puzzle-config returned ' + res.status + ' — ' + body);
+        return null;
+      }
       const config = await res.json();
-      if (!config.supabaseUrl || !config.supabaseAnonKey) return null;
+      if (!config.supabaseUrl || !config.supabaseAnonKey){
+        console.warn('Go Figure: puzzle-config response is missing supabaseUrl/supabaseAnonKey', config);
+        return null;
+      }
       cachedSupabaseConfig = config;
       return config;
     } catch (e){
+      console.warn('Go Figure: could not reach puzzle-config function (offline, or not deployed yet)', e);
       return null;
     }
   }
@@ -40,7 +48,7 @@
   // for this date — so the caller can fall back to puzzles.js cleanly.
   async function fetchPuzzleFromSupabase(dateKey){
     const config = await getSupabaseConfig();
-    if (!config) return null;
+    if (!config) return null; // already warned above
     try {
       const url = config.supabaseUrl + '/rest/v1/puzzles?puzzle_date=eq.' + dateKey + '&select=digits';
       const res = await fetch(url, {
@@ -49,11 +57,21 @@
           Authorization: 'Bearer ' + config.supabaseAnonKey,
         },
       });
-      if (!res.ok) return null;
+      if (!res.ok){
+        const body = await res.text();
+        console.warn('Go Figure: Supabase puzzles query returned ' + res.status + ' — ' + body);
+        return null;
+      }
       const rows = await res.json();
-      if (!Array.isArray(rows) || rows.length === 0) return null;
+      if (!Array.isArray(rows) || rows.length === 0){
+        console.warn('Go Figure: no puzzles row found in Supabase for ' + dateKey + ' — falling back to puzzles.js');
+        return null;
+      }
       const digits = rows[0].digits;
-      if (!Array.isArray(digits) || digits.length === 0) return null;
+      if (!Array.isArray(digits) || digits.length === 0){
+        console.warn('Go Figure: Supabase row for ' + dateKey + ' has a malformed "digits" value (expected a JSON array):', digits);
+        return null;
+      }
       return digits;
     } catch (e){
       console.warn('Go Figure: could not reach Supabase for today\u2019s puzzle, falling back to puzzles.js', e);
